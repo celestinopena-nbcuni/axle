@@ -11,6 +11,53 @@ if (!cmdlineParams) {
   hitDB(cmdlineParams)
 }
 
+function hitDB(cmd = 'Q') {
+  AWS.config.getCredentials(function(err) {
+    if (err) { console.log(err.stack);  } // credentials not loaded
+    else {
+      AWS.config.update({
+        region: 'us-east-1',
+        endpoint: 'http://localhost:8000'
+      });
+      if (cmd==='C') {
+        createTable(movieConfig)
+      } else {
+        queryDB()
+      }
+    }
+  })
+}
+
+function createTable(params, tablename) {
+  console.log(`Create table "${tablename}"`);
+  const dynamodb = new AWS.DynamoDB();
+  dynamodb.createTable(params, function(err, data) {
+    if (err) {
+      console.error('Unable to create table. Error JSON:', JSON.stringify(err, null, 2));
+    } else {
+      console.log('Created table. Table description JSON:', JSON.stringify(data, null, 2));
+    }
+  })
+}
+
+function queryDB() {
+  const docClient = new AWS.DynamoDB.DocumentClient()
+  // Initialize parameters needed to call DynamoDB
+  const params = {
+    TableName: 'tlmd-crud-dynamodb-taximg-dqstore',
+    Key: {
+      'dqid': '8155'
+    } // ,  ProjectionExpression: 'filter'
+  }
+  docClient.get(params, function(err, data) {
+    if (err) {
+      console.error('Unable to read item. Error JSON:', JSON.stringify(err, null, 2));
+    } else {
+      console.log('GetItem succeeded:', JSON.stringify(data, null, 2));
+    }
+  })
+}
+
 function showCredentials() {
   AWS.config.getCredentials(function(err) {
     if (err) console.log(err.stack);
@@ -51,176 +98,126 @@ function arg(i) {
   return process.argv[i+1];
 }
 
-function hitDB(cmd = 'Q') {
-  AWS.config.getCredentials(function(err) {
-    if (err) { console.log(err.stack);  } // credentials not loaded
-    else {
-      AWS.config.update({
-        region: 'us-east-1',
-        endpoint: 'http://localhost:8000'
-      });
-      if (cmd==='C') {
-        // createTable()
-        createTelemundoTable()
-      } else {
-        queryDB()
-      }
-    }
-  })
-}
-
-function createTable() {
-  console.log('Create table', new Date());
-  const dynamodb = new AWS.DynamoDB();
-  const params = {
-    TableName : 'Movies',
-    KeySchema: [
-      { AttributeName: 'year', KeyType: 'HASH'},  //Partition key
-      { AttributeName: 'title', KeyType: 'RANGE' }  //Sort key
-    ],
-    AttributeDefinitions: [
-      { AttributeName: 'year', AttributeType: 'N' },
-      { AttributeName: 'title', AttributeType: 'S' }
-    ],
-    ProvisionedThroughput: {
-      ReadCapacityUnits: 10,
-      WriteCapacityUnits: 10
-    }
+const movieConfig = {
+  TableName : 'Movies',
+  KeySchema: [
+    { AttributeName: 'year', KeyType: 'HASH'},  //Partition key
+    { AttributeName: 'title', KeyType: 'RANGE' }  //Sort key
+  ],
+  AttributeDefinitions: [
+    { AttributeName: 'year', AttributeType: 'N' },
+    { AttributeName: 'title', AttributeType: 'S' }
+  ],
+  ProvisionedThroughput: {
+    ReadCapacityUnits: 10,
+    WriteCapacityUnits: 10
   }
-  dynamodb.createTable(params, function(err, data) {
-    if (err) {
-      console.error('Unable to create table. Error JSON:', JSON.stringify(err, null, 2));
-    } else {
-      console.log('Created table. Table description JSON:', JSON.stringify(data, null, 2));
-    }
-  })
 }
 
-function createTelemundoTable() {
-  const tableParams = {
-    'TableName': 'TelemundoContentparams',
-    'KeyAttributesparams': {
-      'PartitionKeyparams': {
-        'AttributeNameparams': 'contentId',
-        'AttributeType': 'S'
-      }
+const telemundoConfig = {
+  'TableName': 'TelemundoContentparams',
+  'KeyAttributesparams': {
+    'PartitionKeyparams': {
+      'AttributeNameparams': 'contentId',
+      'AttributeType': 'S'
+    }
+  },
+  'NonKeyAttributes': [
+    {
+      'AttributeName': 'itemType',
+      'AttributeType': 'S'
     },
-    'NonKeyAttributes': [
-      {
-        'AttributeName': 'itemType',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'title',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'datePublished',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'source',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'authorPhotoLink',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'byline',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'body',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'coverImage',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'coverImageDescription',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'mpxVideo',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'mpxVideoReference',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'videoCredit',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'featuredGallery',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'promoTitle',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'promoImage',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'promoKicker',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'promoDescription',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'showSeason',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'brand',
-        'AttributeType': 'SS'
-      },
-      {
-        'AttributeName': 'category',
-        'AttributeType': 'SS'
-      },
-      {
-        'AttributeName': 'keywords',
-        'AttributeType': 'SS'
-      },
-      {
-        'AttributeName': 'people',
-        'AttributeType': 'SS'
-      },
-      {
-        'AttributeName': 'roleProfile',
-        'AttributeType': 'SS'
-      },
-      {
-        'AttributeName': 'status',
-        'AttributeType': 'S'
-      }
-    ]
-  }
-  console.log('Table params', obj2str(tableParams));
-}
-
-function queryDB() {
-  const docClient = new AWS.DynamoDB.DocumentClient()
-  // Initialize parameters needed to call DynamoDB
-  const params = {
-    TableName: 'tlmd-crud-dynamodb-taximg-dqstore',
-    Key: {
-      'dqid': '8155'
-    } // ,  ProjectionExpression: 'filter'
-  }
-  docClient.get(params, function(err, data) {
-    if (err) {
-      console.error('Unable to read item. Error JSON:', JSON.stringify(err, null, 2));
-    } else {
-      console.log('GetItem succeeded:', JSON.stringify(data, null, 2));
+    {
+      'AttributeName': 'title',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'datePublished',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'source',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'authorPhotoLink',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'byline',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'body',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'coverImage',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'coverImageDescription',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'mpxVideo',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'mpxVideoReference',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'videoCredit',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'featuredGallery',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'promoTitle',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'promoImage',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'promoKicker',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'promoDescription',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'showSeason',
+      'AttributeType': 'S'
+    },
+    {
+      'AttributeName': 'brand',
+      'AttributeType': 'SS'
+    },
+    {
+      'AttributeName': 'category',
+      'AttributeType': 'SS'
+    },
+    {
+      'AttributeName': 'keywords',
+      'AttributeType': 'SS'
+    },
+    {
+      'AttributeName': 'people',
+      'AttributeType': 'SS'
+    },
+    {
+      'AttributeName': 'roleProfile',
+      'AttributeType': 'SS'
+    },
+    {
+      'AttributeName': 'status',
+      'AttributeType': 'S'
     }
-  })
+  ]
 }
