@@ -1,0 +1,14 @@
+{
+  "name": "axle",
+  "version": "0.0.1",
+  "description": "Content database for Telemundo in nosql",
+  "main": "starthere.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "cp",
+  "license": "MIT",
+  "dependencies": {
+    "aws-sdk": "^2.610.0"
+  }
+}
