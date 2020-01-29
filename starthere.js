@@ -79,7 +79,7 @@ function loadMoviesTable() {
 function loadTelemundoTable() {
   const docClient = new AWS.DynamoDB.DocumentClient();
   console.log('Importing P7 data into DynamoDB...');
-  const p7content = readObject('./data/p7data.json')
+  const p7content = readObject('./data/tlmd-p7-data.json') // or p7data.json
   if (p7content) {
     p7content.forEach(inspectP7)
     /*
@@ -105,17 +105,33 @@ function loadTelemundoTable() {
 }
 
 function inspectP7(record, index) {
-  console.log('Item at index', index, record.type);
+  let p7item = {}
+  console.log('*** Item at index', index, record.type);
+  if (record.created) {
+    p7item.Create_DT = new Date(record.created * 1000).toLocaleString()
+  } else console.log(`Record ${index} has no create date`);
+  if (record.changed) {
+    p7item.Updated_DT = new Date(record.changed * 1000).toLocaleString()
+  } else console.log(`Record ${index} has no updated date`);
+  if (_.has(record, 'field_publish_date.und[0]')) {
+    p7item.Published_DT = record.field_publish_date.und[0].value
+  } else console.log(`Record ${index} has no publish date`);
   if (_.has(record, 'field_byline.und[0]')) {
-    console.log('Byline', record.field_byline.und[0].value)
-  } else {
-    console.log(`Record ${index} has no byline`);
-  }
+    p7item.Byline = record.field_byline.und[0].value
+  } else console.log(`Record ${index} has no byline`);
   if (_.has(record, 'field_categories.und')) {
-    console.log('Categories', record.field_categories.und.map(item => item.tid).join(','))
-  } else {
-    console.log(`Record ${index} has no categories`);
-  }
+    p7item.Categories = record.field_categories.und.map(item => item.tid).join(',')
+  } else console.log(`Record ${index} has no categories`);
+  if (_.has(record, 'field_keywords.und')) {
+    p7item.Keywords = record.field_keywords.und.map(item => item.tid).join(',')
+  } else console.log(`Record ${index} has no keywords`);
+  if (_.has(record, 'field_show_season_episode.und[0]')) {
+    p7item.Show = _.get(record, 'field_show_season_episode.und[0].show', '-')
+    p7item.Season = _.get(record, 'field_show_season_episode.und[0].season', '-')
+    p7item.Episode = _.get(record, 'field_show_season_episode.und[0].episode', '-')
+  } else console.log(`Record ${index} has no show/season/episode`);
+  console.log('p7item', obj2str(p7item))
+  console.log('');
 }
 
 function queryTable(tablename, options) {
