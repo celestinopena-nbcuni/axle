@@ -2,13 +2,14 @@ const AWS = require('aws-sdk'),
   path = require('path'),
   fs = require('fs'),
   YAML = require('yaml'),
+  _ = require('lodash'),
   dbConfigs = require('./db-configs')
 
-// showCredentials()
 const cmdlineParams = arg(1)
 if (!cmdlineParams) {
-  console.log('usage: node starthere.js [C | Q]');
+  console.log('usage: node starthere.js [C | L | Q]');
 } else {
+  // showCredentials()
   hitDB(cmdlineParams)
 }
 
@@ -21,17 +22,25 @@ function hitDB(cmd = 'Q') {
         endpoint: 'http://localhost:8000'
       });
       if (cmd==='C') {
-        // createTable(dbConfigs.telemundo)
-        console.log('Telemundo cfg', dbConfigs.telemundo);
+        // console.log('Telemundo cfg', dbConfigs.telemundo);
+        createTable(dbConfigs.telemundo, 'TelemundoContent')
+      } else if (cmd==='L') {
+        // loadMoviesTable()
+        loadTelemundoTable()
       } else {
-        queryDB()
+        queryTable('Movies', {
+          Key: {
+            'year': 2000,
+            'title': 'Castaway'
+          }
+        })
       }
     }
   })
 }
 
 function createTable(params, tablename) {
-  console.log(`Create table "${tablename}"`);
+  console.log(`Create table '${tablename}'`, params);
   const dynamodb = new AWS.DynamoDB();
   dynamodb.createTable(params, function(err, data) {
     if (err) {
@@ -42,15 +51,80 @@ function createTable(params, tablename) {
   })
 }
 
-function queryDB() {
+function loadMoviesTable() {
+  const docClient = new AWS.DynamoDB.DocumentClient();
+  console.log('Importing movies into DynamoDB. Please wait.');
+  const allMovies = readObject('./data/moviedata.json')
+  if (allMovies) {
+    allMovies.forEach(function(movie) {
+      var params = {
+        TableName: 'Movies',
+        Item: {
+          'year':  movie.year,
+          'title': movie.title,
+          'info':  movie.info
+          }
+      };
+      docClient.put(params, function(err, data) {
+        if (err) {
+          console.error('Unable to add movie', movie.title, '. Error JSON:', JSON.stringify(err, null, 2));
+        } else {
+          console.log('PutItem succeeded:', movie.title);
+        }
+      });
+    })
+  } // insert each movie
+}
+
+function loadTelemundoTable() {
+  const docClient = new AWS.DynamoDB.DocumentClient();
+  console.log('Importing P7 data into DynamoDB...');
+  const p7content = readObject('./data/p7data.json')
+  if (p7content) {
+    p7content.forEach(inspectP7)
+    /*
+    p7content.forEach(function(record) {
+      var params = {
+        TableName: 'TelemundoContent',
+        Item: {
+          'type':  record.type,
+          'status': record.status,
+          'series':  record.series
+        }
+      };
+      docClient.put(params, function(err, data) {
+        if (err) {
+          console.error('Unable to add P7 record', record.type, '. Error JSON:', JSON.stringify(err, null, 2));
+        } else {
+          console.log('Putitem succeeded:', record.type);
+        }
+      });
+    })
+    */
+  } // insert each P7 record
+}
+
+function inspectP7(record, index) {
+  console.log('Item at index', index, record.type);
+  if (_.has(record, 'field_byline.und[0]')) {
+    console.log('Byline', record.field_byline.und[0].value)
+  } else {
+    console.log(`Record ${index} has no byline`);
+  }
+  if (_.has(record, 'field_categories.und')) {
+    console.log('Categories', record.field_categories.und.map(item => item.tid).join(','))
+  } else {
+    console.log(`Record ${index} has no categories`);
+  }
+}
+
+function queryTable(tablename, options) {
   const docClient = new AWS.DynamoDB.DocumentClient()
   // Initialize parameters needed to call DynamoDB
-  const params = {
-    TableName: 'tlmd-crud-dynamodb-taximg-dqstore',
-    Key: {
-      'dqid': '8155'
-    } // ,  ProjectionExpression: 'filter'
+  let params = {
+    TableName: tablename
   }
+  Object.keys(options).forEach(key => params[key] = options[key])
   docClient.get(params, function(err, data) {
     if (err) {
       console.error('Unable to read item. Error JSON:', JSON.stringify(err, null, 2));
@@ -58,6 +132,14 @@ function queryDB() {
       console.log('GetItem succeeded:', JSON.stringify(data, null, 2));
     }
   })
+}
+
+function getQParams(tablename, keymap) {
+  let params = {
+    TableName: tablename,
+    Key: {}
+  }
+  Object.keys(keymap).forEach(attr => params.Key[attr] = keymap[attr])
 }
 
 function showCredentials() {
@@ -77,7 +159,7 @@ function showCredentials() {
     }
   })
 }
-
+/* --- General functions --- */
 function readFile(filepath) {
   let contents = null;
   try {
@@ -94,7 +176,16 @@ function readConfig(filepath) {
   return contents
 }
 
+function readObject(filepath) {
+  let contents = null;
+  try {
+    contents = JSON.parse(fs.readFileSync(filepath, 'utf8'))
+  } catch (err) { console.error(err) }
+  return contents
+}
+
 function obj2str(obj) { return JSON.stringify(obj, null, 2) }
+
 function arg(i) {
   if (i<0 || i>=process.argv.length-1) return '';
   return process.argv[i+1];

@@ -10,6 +10,7 @@
   "license": "MIT",
   "dependencies": {
     "aws-sdk": "^2.567.0",
+    "lodash": "^4.17.15",
     "yaml": "^1.7.2"
   }
 }

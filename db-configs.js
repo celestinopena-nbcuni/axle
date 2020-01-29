@@ -1,110 +1,18 @@
 module.exports = {
   'telemundo': {
-    'TableName': 'TelemundoContentparams',
-    'KeyAttributesparams': {
-      'PartitionKeyparams': {
-        'AttributeNameparams': 'contentId',
-        'AttributeType': 'S'
-      }
-    },
-    'NonKeyAttributes': [
-      {
-        'AttributeName': 'itemType',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'title',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'datePublished',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'source',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'authorPhotoLink',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'byline',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'body',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'coverImage',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'coverImageDescription',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'mpxVideo',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'mpxVideoReference',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'videoCredit',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'featuredGallery',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'promoTitle',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'promoImage',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'promoKicker',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'promoDescription',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'showSeason',
-        'AttributeType': 'S'
-      },
-      {
-        'AttributeName': 'brand',
-        'AttributeType': 'SS'
-      },
-      {
-        'AttributeName': 'category',
-        'AttributeType': 'SS'
-      },
-      {
-        'AttributeName': 'keywords',
-        'AttributeType': 'SS'
-      },
-      {
-        'AttributeName': 'people',
-        'AttributeType': 'SS'
-      },
-      {
-        'AttributeName': 'roleProfile',
-        'AttributeType': 'SS'
-      },
-      {
-        'AttributeName': 'status',
-        'AttributeType': 'S'
-      }
-    ]
+    'TableName': 'TelemundoContent',
+    KeySchema: [
+      { AttributeName: 'vid', KeyType: 'HASH'},  //Partition key
+      { AttributeName: 'type', KeyType: 'RANGE' }  //Sort key
+    ],
+    AttributeDefinitions: [
+      { AttributeName: 'vid', AttributeType: 'N' },
+      { AttributeName: 'type', AttributeType: 'S' }
+    ],
+    ProvisionedThroughput: {
+      ReadCapacityUnits: 10,
+      WriteCapacityUnits: 10
+    }
   },
   'movies': {
     TableName : 'Movies',
