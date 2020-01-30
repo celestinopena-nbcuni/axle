@@ -81,57 +81,69 @@ function loadTelemundoTable() {
   console.log('Importing P7 data into DynamoDB...');
   const p7content = readObject('./data/tlmd-p7-data.json') // or p7data.json
   if (p7content) {
-    p7content.forEach(inspectP7)
-    /*
-    p7content.forEach(function(record) {
-      var params = {
-        TableName: 'TelemundoContent',
-        Item: {
-          'type':  record.type,
-          'status': record.status,
-          'series':  record.series
-        }
-      };
-      docClient.put(params, function(err, data) {
+    p7content.forEach(function(record, index) {
+      // let newItem = transformP7(record, index)
+      docClient.put({ TableName: 'TelemundoContent', Item: transformP7(record) }, function(err, data) {
         if (err) {
-          console.error('Unable to add P7 record', record.type, '. Error JSON:', JSON.stringify(err, null, 2));
+          console.error('Unable to add P7 record. Error JSON:', obj2str(err));
         } else {
-          console.log('Putitem succeeded:', record.type);
+          console.log('Putitem succeeded for record', index);
         }
-      });
+      })
     })
-    */
   } // insert each P7 record
 }
 
-function inspectP7(record, index) {
+function transformP7(record, index) {
   let p7item = {}
-  console.log('*** Item at index', index, record.type);
+  if (record.uid && record.nid && record.type) {
+    p7item.PK = record.uid + '-' + record.nid // user + contentid
+    p7item.SK = record.type
+    p7item.type = record.type
+    p7item.uid = record.uid
+    p7item.uuid = record.uuid
+    p7item.nid = record.nid
+  } else {
+    console.log(`Record ${index} has no uid`);
+    return
+  }
+  if (record.title) p7item.title = record.title
+  // else console.log(`Record ${index} has no title`);
+  if (record.status) p7item.status = record.status
+  // else console.log(`Record ${index} has no status`);
   if (record.created) {
     p7item.Create_DT = new Date(record.created * 1000).toLocaleString()
-  } else console.log(`Record ${index} has no create date`);
+  }
+  // else console.log(`Record ${index} has no create date`);
   if (record.changed) {
     p7item.Updated_DT = new Date(record.changed * 1000).toLocaleString()
-  } else console.log(`Record ${index} has no updated date`);
+  }
+  // else console.log(`Record ${index} has no updated date`);
   if (_.has(record, 'field_publish_date.und[0]')) {
     p7item.Published_DT = record.field_publish_date.und[0].value
-  } else console.log(`Record ${index} has no publish date`);
+  }
+  // else console.log(`Record ${index} has no publish date`);
   if (_.has(record, 'field_byline.und[0]')) {
     p7item.Byline = record.field_byline.und[0].value
-  } else console.log(`Record ${index} has no byline`);
+  }
+  // else console.log(`Record ${index} has no byline`);
   if (_.has(record, 'field_categories.und')) {
     p7item.Categories = record.field_categories.und.map(item => item.tid).join(',')
-  } else console.log(`Record ${index} has no categories`);
+  }
+  // else console.log(`Record ${index} has no categories`);
   if (_.has(record, 'field_keywords.und')) {
     p7item.Keywords = record.field_keywords.und.map(item => item.tid).join(',')
-  } else console.log(`Record ${index} has no keywords`);
+  }
+  // else console.log(`Record ${index} has no keywords`);
   if (_.has(record, 'field_show_season_episode.und[0]')) {
     p7item.Show = _.get(record, 'field_show_season_episode.und[0].show', '-')
     p7item.Season = _.get(record, 'field_show_season_episode.und[0].season', '-')
     p7item.Episode = _.get(record, 'field_show_season_episode.und[0].episode', '-')
-  } else console.log(`Record ${index} has no show/season/episode`);
-  console.log('p7item', obj2str(p7item))
-  console.log('');
+  }
+  // else console.log(`Record ${index} has no show/season/episode`);
+  console.log(`Record ${index} =`, propstr(p7item, ['PK', 'SK']))
+  // console.log(`Record ${index} =`, obj2str(p7item)); console.log('');
+  return p7item
 }
 
 function queryTable(tablename, options) {
@@ -205,4 +217,11 @@ function obj2str(obj) { return JSON.stringify(obj, null, 2) }
 function arg(i) {
   if (i<0 || i>=process.argv.length-1) return '';
   return process.argv[i+1];
+}
+
+function propstr(sourceObj, propList) {
+  return propList.reduce((orig, curr) => {
+    if (sourceObj[curr]) orig.push(`${curr}: ${sourceObj[curr]}`)
+    return orig
+  }, []).join(', ')
 }

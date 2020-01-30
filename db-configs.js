@@ -2,12 +2,12 @@ module.exports = {
   'telemundo': {
     'TableName': 'TelemundoContent',
     KeySchema: [
-      { AttributeName: 'vid', KeyType: 'HASH'},  //Partition key
-      { AttributeName: 'type', KeyType: 'RANGE' }  //Sort key
+      { AttributeName: 'PK', KeyType: 'HASH'},  // Partition key
+      { AttributeName: 'SK', KeyType: 'RANGE' }  // Sort key
     ],
     AttributeDefinitions: [
-      { AttributeName: 'vid', AttributeType: 'N' },
-      { AttributeName: 'type', AttributeType: 'S' }
+      { AttributeName: 'PK', AttributeType: 'S' },
+      { AttributeName: 'SK', AttributeType: 'S' }
     ],
     ProvisionedThroughput: {
       ReadCapacityUnits: 10,
