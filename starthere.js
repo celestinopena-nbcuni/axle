@@ -7,7 +7,7 @@ const AWS = require('aws-sdk'),
 
 const cmdlineParams = arg(1)
 if (!cmdlineParams) {
-  console.log('usage: node starthere.js [C | L | Q]');
+  console.log('usage: node starthere.js [C | L filename| R filename| Q]');
 } else {
   // showCredentials()
   hitDB(cmdlineParams)
@@ -26,13 +26,15 @@ function hitDB(cmd = 'Q') {
         createTable(dbConfigs.telemundo, 'TelemundoContent')
       } else if (cmd==='L') {
         // loadMoviesTable()
-        loadTelemundoTable()
+        const datafile = arg(2)
+        const doTransform = arg(3) ? false : true
+        if (datafile) loadTelemundoTable(datafile, doTransform)
+      } else if (cmd==='R') {
+        const datafile = arg(2)
+        if (datafile) readTelemundoDatafile(datafile, (arg(3) ? false : true))
       } else {
         queryTable('Movies', {
-          Key: {
-            'year': 2000,
-            'title': 'Castaway'
-          }
+          Key: { 'year': 2004, 'title': 'Alfie' }
         })
       }
     }
@@ -51,47 +53,49 @@ function createTable(params, tablename) {
   })
 }
 
-function loadMoviesTable() {
+function loadTelemundoTable(datafile, doTransform = true) {
+  const p7content = readObject(datafile)
+  if (!p7content) {
+    console.log('Problem reading', datafile)
+    return
+  }
   const docClient = new AWS.DynamoDB.DocumentClient();
-  console.log('Importing movies into DynamoDB. Please wait.');
-  const allMovies = readObject('./data/moviedata.json')
-  if (allMovies) {
-    allMovies.forEach(function(movie) {
-      var params = {
-        TableName: 'Movies',
-        Item: {
-          'year':  movie.year,
-          'title': movie.title,
-          'info':  movie.info
-          }
-      };
-      docClient.put(params, function(err, data) {
-        if (err) {
-          console.error('Unable to add movie', movie.title, '. Error JSON:', JSON.stringify(err, null, 2));
-        } else {
-          console.log('PutItem succeeded:', movie.title);
-        }
-      });
-    })
-  } // insert each movie
-}
-
-function loadTelemundoTable() {
-  const docClient = new AWS.DynamoDB.DocumentClient();
-  console.log('Importing P7 data into DynamoDB...');
-  const p7content = readObject('./data/tlmd-p7-data.json') // or p7data.json
-  if (p7content) {
+  if (Array.isArray(p7content)) {
+    console.log(`Importing P7 data in ${datafile} into DynamoDB...`)
     p7content.forEach(function(record, index) {
-      // let newItem = transformP7(record, index)
-      docClient.put({ TableName: 'TelemundoContent', Item: transformP7(record) }, function(err, data) {
-        if (err) {
-          console.error('Unable to add P7 record. Error JSON:', obj2str(err));
-        } else {
-          console.log('Putitem succeeded for record', index);
-        }
+      docClient.put({
+        TableName: 'TelemundoContent',
+        Item: doTransform ? transformP7(p7content) : p7content
+      }, function(err, data) {
+        if (err) console.error('Unable to add P7 record. Error JSON:', obj2str(err));
+        else console.log('Putitem succeeded for record', index);
       })
     })
-  } // insert each P7 record
+  } else {
+    docClient.put({
+      TableName: 'TelemundoContent',
+      Item: doTransform ? transformP7(p7content) : p7content
+    }, function(err, data) {
+      if (err) console.error('Unable to add P7 record. Error JSON:', obj2str(err));
+      else console.log('Putitem succeeded for single record');
+    })
+  }
+}
+
+function readTelemundoDatafile(datafile, doTransform = true) {
+  const p7content = readObject(datafile)
+  if (!p7content) {
+    console.log('Problem reading', datafile)
+    return
+  } else if (Array.isArray(p7content)) {
+    p7content.forEach(function(record, index) {
+      if (doTransform) transformP7(record, index)
+      else console.log('Record', index, obj2str(record));
+    })
+  } else {
+    if (doTransform) transformP7(p7content)
+    else console.log('Record', obj2str(p7content));
+  }
 }
 
 function transformP7(record, index) {
@@ -104,7 +108,7 @@ function transformP7(record, index) {
     p7item.uuid = record.uuid
     p7item.nid = record.nid
   } else {
-    console.log(`Record ${index} has no uid`);
+    console.log(`Record ${index || ''} has no uid`);
     return
   }
   if (record.title) p7item.title = record.title
@@ -141,9 +145,34 @@ function transformP7(record, index) {
     p7item.Episode = _.get(record, 'field_show_season_episode.und[0].episode', '-')
   }
   // else console.log(`Record ${index} has no show/season/episode`);
-  console.log(`Record ${index} =`, propstr(p7item, ['PK', 'SK']))
-  // console.log(`Record ${index} =`, obj2str(p7item)); console.log('');
+  // console.log(`Record ${index} =`, propstr(p7item, ['PK', 'SK']))
+  console.log(`Record ${index || ''} =`, obj2str(p7item)); console.log('');
   return p7item
+}
+
+function loadMoviesTable() {
+  const docClient = new AWS.DynamoDB.DocumentClient();
+  console.log('Importing movies into DynamoDB. Please wait.');
+  const allMovies = readObject('./data/moviedata.json')
+  if (allMovies) {
+    allMovies.forEach(function(movie) {
+      var params = {
+        TableName: 'Movies',
+        Item: {
+          'year':  movie.year,
+          'title': movie.title,
+          'info':  movie.info
+          }
+      };
+      docClient.put(params, function(err, data) {
+        if (err) {
+          console.error('Unable to add movie', movie.title, '. Error JSON:', JSON.stringify(err, null, 2));
+        } else {
+          console.log('PutItem succeeded:', movie.title);
+        }
+      });
+    })
+  } // insert each movie
 }
 
 function queryTable(tablename, options) {
