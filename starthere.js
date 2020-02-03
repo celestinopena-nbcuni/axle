@@ -61,11 +61,11 @@ function loadTelemundoTable(datafile, doTransform = true) {
   }
   const docClient = new AWS.DynamoDB.DocumentClient();
   if (Array.isArray(p7content)) {
-    console.log(`Importing P7 data in ${datafile} into DynamoDB...`)
+    console.log(`Importing P7 data in ${datafile} into DynamoDB (transform data? ${doTransform?'Y':'N'})...`)
     p7content.forEach(function(record, index) {
       docClient.put({
         TableName: 'TelemundoContent',
-        Item: doTransform ? transformP7(p7content) : p7content
+        Item: doTransform ? transformP7(record) : record
       }, function(err, data) {
         if (err) console.error('Unable to add P7 record. Error JSON:', obj2str(err));
         else console.log('Putitem succeeded for record', index);
@@ -88,12 +88,14 @@ function readTelemundoDatafile(datafile, doTransform = true) {
     console.log('Problem reading', datafile)
     return
   } else if (Array.isArray(p7content)) {
+    console.log(`Read import data in ${datafile} (do transform? ${doTransform?'Y':'N'})...`)
     p7content.forEach(function(record, index) {
       if (doTransform) transformP7(record, index)
       else console.log('Record', index, obj2str(record));
     })
   } else {
-    if (doTransform) transformP7(p7content)
+    console.log(`Read import object in ${datafile} (do transform? ${doTransform?'Y':'N'})...`)
+    if (doTransform) transformP7(p7content, 0)
     else console.log('Record', obj2str(p7content));
   }
 }
@@ -108,7 +110,7 @@ function transformP7(record, index) {
     p7item.uuid = record.uuid
     p7item.nid = record.nid
   } else {
-    console.log(`Record ${index || ''} has no uid`);
+    console.log(`Record ${index || ''} has no uid`, record.uid, record.nid, record.type);
     return
   }
   if (record.title) p7item.title = record.title
