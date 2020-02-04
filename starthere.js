@@ -7,7 +7,13 @@ const AWS = require('aws-sdk'),
 
 const cmdlineParams = arg(1)
 if (!cmdlineParams) {
-  console.log('usage: node starthere.js [C | L filename| R filename| Q]');
+  console.log('usage: node starthere.js options');
+  console.log(' Options');
+  console.log('  C = create table');
+  console.log('  D = delete table');
+  console.log('  L filename = load the given json file into the database');
+  console.log('  R filename = read the given json file');
+  console.log('  Q pk sk = query table by PK and SK');
 } else {
   // showCredentials()
   hitDB(cmdlineParams)
@@ -23,7 +29,9 @@ function hitDB(cmd = 'Q') {
       });
       if (cmd==='C') {
         // console.log('Telemundo cfg', dbConfigs.telemundo);
-        createTable(dbConfigs.telemundo, 'TelemundoContent')
+        createTable(dbConfigs.telemundoPlus, 'TelemundoContent')
+      } else if (cmd==='D') {
+        deleteTelemundoTable()
       } else if (cmd==='L') {
         // loadMoviesTable()
         const datafile = arg(2)
@@ -32,10 +40,11 @@ function hitDB(cmd = 'Q') {
       } else if (cmd==='R') {
         const datafile = arg(2)
         if (datafile) readTelemundoDatafile(datafile, (arg(3) ? false : true))
+      } else if (cmd==='Q') {
+        // queryTable('Movies', { Key: { 'year': 2004, 'title': 'Alfie' } })
+        queryTelemundoTable(arg(2), arg(3))
       } else {
-        queryTable('Movies', {
-          Key: { 'year': 2004, 'title': 'Alfie' }
-        })
+        console.log('Unrecognized option:', cmd);
       }
     }
   })
@@ -98,6 +107,41 @@ function readTelemundoDatafile(datafile, doTransform = true) {
     if (doTransform) transformP7(p7content, 0)
     else console.log('Record', obj2str(p7content));
   }
+}
+
+function queryTelemundoTable(pkvalue, skvalue) {
+  // if (!(pkvalue && skvalue)) { console.log('Please provide values for PK and SK'); return; }
+  if (!pkvalue) { console.log('Please provide PK value'); return; }
+  /*
+  const params = {
+    TableName: 'TelemundoContent',
+    KeyConditionExpression: 'PK = :pk and SK = :sk',
+    ExpressionAttributeValues: { ':pk': {S: pkvalue}, ':sk': {S: skvalue} },
+    ProjectionExpression: 'PK, SK',
+    FilterExpression: 'contains (AnotherColumn, :topic)'
+  }
+  */
+  // const params = { TableName: 'TelemundoContent', Key: { 'PK': pkvalue, 'SK': skvalue } }
+  const params = { TableName: 'TelemundoContent', Key: { 'PK': pkvalue }}
+  const docClient = new AWS.DynamoDB.DocumentClient();
+  docClient.get(params, function (err, data) {
+    // if (err) console.log('Error getting item by PK+SK', pkvalue, skvalue, obj2str(err));  else console.log('Got item by PK', pkvalue, skvalue, data);
+    if (err) console.log('Error getting item by PK', pkvalue, obj2str(err));
+    if (data.Item) console.log('Got item by PK', pkvalue, data.Item);
+    else console.log('NO item by PK', pkvalue);
+  })
+}
+
+function deleteTelemundoTable() {
+  console.log('Removing the TelemundoContent table...');
+  const dynamodb = new AWS.DynamoDB();
+  dynamodb.deleteTable({TableName: 'TelemundoContent'}, function(err, data) {
+    if (err) {
+      console.error('Unable to delete table. Error JSON:', obj2str(err));
+    } else {
+      console.log('Deleted table.');
+    }
+  })
 }
 
 function transformP7(record, index) {
