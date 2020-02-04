@@ -42,7 +42,10 @@ function hitDB(cmd = 'Q') {
         if (datafile) readTelemundoDatafile(datafile, (arg(3) ? false : true))
       } else if (cmd==='Q') {
         // queryTable('Movies', { Key: { 'year': 2004, 'title': 'Alfie' } })
-        queryTelemundoTable(arg(2), arg(3))
+        const pk=arg(2)
+        const sk=arg(3)
+        queryTelemundoTable(pk, sk)
+        queryTelemundoIndex(sk, pk)
       } else {
         console.log('Unrecognized option:', cmd);
       }
@@ -112,23 +115,46 @@ function readTelemundoDatafile(datafile, doTransform = true) {
 function queryTelemundoTable(pkvalue, skvalue) {
   // if (!(pkvalue && skvalue)) { console.log('Please provide values for PK and SK'); return; }
   if (!pkvalue) { console.log('Please provide PK value'); return; }
-  /*
-  const params = {
-    TableName: 'TelemundoContent',
-    KeyConditionExpression: 'PK = :pk and SK = :sk',
-    ExpressionAttributeValues: { ':pk': {S: pkvalue}, ':sk': {S: skvalue} },
-    ProjectionExpression: 'PK, SK',
-    FilterExpression: 'contains (AnotherColumn, :topic)'
-  }
-  */
-  // const params = { TableName: 'TelemundoContent', Key: { 'PK': pkvalue, 'SK': skvalue } }
-  const params = { TableName: 'TelemundoContent', Key: { 'PK': pkvalue }}
+  const params = { TableName: 'TelemundoContent', Key: { 'nid': pkvalue, 'child': skvalue } }
+  // const params = { TableName: 'TelemundoContent', Key: { 'PK': pkvalue }}
   const docClient = new AWS.DynamoDB.DocumentClient();
   docClient.get(params, function (err, data) {
-    // if (err) console.log('Error getting item by PK+SK', pkvalue, skvalue, obj2str(err));  else console.log('Got item by PK', pkvalue, skvalue, data);
-    if (err) console.log('Error getting item by PK', pkvalue, obj2str(err));
-    if (data.Item) console.log('Got item by PK', pkvalue, data.Item);
-    else console.log('NO item by PK', pkvalue);
+    console.log('Query main table by:', pkvalue, skvalue);
+    if (err) console.log('Error getting item by PK+SK', pkvalue, skvalue, obj2str(err));
+    else if (data.Item) console.log('Got item by PK', pkvalue, skvalue, data.Item);
+    else console.log('NO item by PK', pkvalue, skvalue);
+  })
+}
+
+function queryTelemundoIndex(pkvalue, skvalue) {
+  if (!pkvalue) { console.log('Please provide PK value'); return; }
+  const params = {
+    TableName: 'TelemundoContent',
+    IndexName: 'GSI-1',
+    KeyConditionExpression: 'child = :c and nid = :n',
+    ExpressionAttributeValues: {
+      ':c': {S: pkvalue},
+      ':n' : {S: skvalue}
+    },
+    ProjectionExpression: 'child, nid'
+  }
+  const params2 = {
+    TableName: 'TelemundoContent', IndexName: 'GSI-1',
+    KeyConditionExpression: 'child = :c and begins_with(#ctype, :t) ',
+    ExpressionAttributeNames: { '#ctype': 'ctype'},
+    ExpressionAttributeValues: {
+     ':c': {S: pkvalue},
+     ':t': {S: skvalue}
+    },
+    ProjectionExpression: 'child, ctype'
+  }
+  // const docClient = new AWS.DynamoDB.DocumentClient();
+  const docClient = new AWS.DynamoDB();
+  docClient.query(params2, function (err, data) {
+    console.log('Query secondary index by:', pkvalue, skvalue);
+    if (err) console.log('Error getting item by PK+SK', pkvalue, skvalue, obj2str(err));
+    else if (data.Item) console.log('Got item by PK', pkvalue, skvalue, data.Item);
+    else console.log('NO item by PK', pkvalue, skvalue);
   })
 }
 

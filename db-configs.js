@@ -17,17 +17,20 @@ module.exports = {
   'telemundoPlus': {
     'TableName': 'TelemundoContent',
     AttributeDefinitions: [
-      { AttributeName: 'PK', AttributeType: 'S' },
-      { AttributeName: 'type', AttributeType: 'S' }
+      { AttributeName: 'nid', AttributeType: 'S' },
+      { AttributeName: 'child', AttributeType: 'S' },
+      { AttributeName: 'ctype', AttributeType: 'S' }
     ],
     KeySchema: [
-      { AttributeName: 'PK', KeyType: 'HASH'}
+      { AttributeName: 'nid', KeyType: 'HASH'},
+      { AttributeName: 'child', KeyType: 'RANGE'}
     ],
     GlobalSecondaryIndexes: [
       {
         IndexName: 'GSI-1',
         KeySchema: [
-          { AttributeName: 'type', KeyType: 'HASH' }
+          { AttributeName: 'child', KeyType: 'HASH' },
+          { AttributeName: 'ctype', KeyType: 'RANGE' }
         ],
         Projection: { ProjectionType: 'ALL' },
         ProvisionedThroughput: {
