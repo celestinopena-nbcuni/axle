@@ -14,8 +14,8 @@ if (!cmdlineParams) {
   console.log('  L filename = load the given json file into the database');
   console.log('  R filename = read the given json file');
   console.log('  Q pk sk = query table by PK and SK');
+  console.log('  QI pk sk = query index by PK and SK');
 } else {
-  // showCredentials()
   hitDB(cmdlineParams)
 }
 
@@ -28,28 +28,21 @@ function hitDB(cmd = 'Q') {
         endpoint: 'http://localhost:8000'
       });
       if (cmd==='C') {
-        const tableConfig=arg(2)
-        if (tableConfig) createTable(readObject(tableConfig), arg(3))
-        else createTable(dbConfigs.films, 'Films')
+        // console.log('Telemundo cfg', dbConfigs.telemundo);
+        createTable(dbConfigs.telemundoPlus, 'TelemundoContent')
       } else if (cmd==='D') {
-        deleteTable('Films')
+        deleteTelemundoTable()
       } else if (cmd==='L') {
-        // loadMoviesTable()
         const datafile = arg(2)
-        if (datafile) loadTable(datafile, 'Films')
+        const doTransform = arg(3) ? false : true
+        if (datafile) loadTelemundoTable(datafile, doTransform)
       } else if (cmd==='R') {
         const datafile = arg(2)
         if (datafile) readTelemundoDatafile(datafile, (arg(3) ? false : true))
-      } else if (cmd==='Q') {
-        // queryTable('Movies', { Key: { 'year': 2004, 'title': 'Alfie' } })
-        queryTable('Films', { Key: { 'actor': arg(2), 'film': arg(3) } })
-        queryIndex('Films', arg(2), arg(4))
-        /*0
-        const pk=arg(2)
-        const sk=arg(3)
-        queryTelemundoTable(pk, sk)
-        queryTelemundoIndex(sk, pk)
-        */
+      } else if (cmd.toUpperCase()==='Q') {
+        queryTelemundoTable(arg(2), arg(3))
+      } else if (cmd.toUpperCase()==='QI') {
+        queryTelemundoIndex(arg(2), arg(3))
       } else {
         console.log('Unrecognized option:', cmd);
       }
@@ -65,100 +58,6 @@ function createTable(params, tablename) {
       console.error('Unable to create table. Error JSON:', JSON.stringify(err, null, 2));
     } else {
       console.log('Created table. Table description JSON:', JSON.stringify(data, null, 2));
-    }
-  })
-}
-
-function loadTable(datafile, tablename) {
-  const content = readObject(datafile)
-  if (!content) {
-    console.log('Problem reading', datafile)
-    return
-  }
-  const docClient = new AWS.DynamoDB.DocumentClient();
-  if (Array.isArray(content)) {
-    console.log(`Importing data in ${datafile} into ${tablename}...`)
-    content.forEach(function(record, index) {
-      docClient.put({
-        TableName: tablename,
-        Item: record
-      }, function(err, data) {
-        if (err) console.error('Unable to add record. Error JSON:', obj2str(err), record);
-        else console.log('Putitem succeeded for record', index);
-      })
-    })
-  } else {
-    docClient.put({
-      TableName: tablename,
-      Item: content
-    }, function(err, data) {
-      if (err) console.error('Unable to add record. Error JSON:', obj2str(err));
-      else console.log('Putitem succeeded for single record');
-    })
-  }
-}
-
-function queryTable(tablename, options) {
-  const docClient = new AWS.DynamoDB.DocumentClient()
-  // Initialize parameters needed to call DynamoDB
-  let params = {
-    TableName: tablename
-  }
-  Object.keys(options).forEach(key => params[key] = options[key])
-  docClient.get(params, function(err, data) {
-    if (err) {
-      console.error('Unable to read item. Error JSON:', JSON.stringify(err, null, 2));
-    } else {
-      console.log('GetItem succeeded:', JSON.stringify(data, null, 2));
-    }
-  })
-}
-
-function queryIndex(tablename, pkvalue, skvalue) {
-  if (!pkvalue) { console.log('Please provide PK value'); return; }
-  const params = {
-    TableName: tablename,
-    IndexName: 'LOC-1',
-    KeyConditionExpression: 'actor = :a and #year = :y',
-    ExpressionAttributeNames: {
-      '#year': 'year'
-    },
-    ExpressionAttributeValues: {
-      ':a': {S: pkvalue},
-      ':y' : {N: skvalue}
-    },
-    ProjectionExpression: 'actor, #year, film'
-  }
-  const params2 = {
-    TableName: tablename,
-    IndexName: 'LOC-1',
-    KeyConditionExpression: 'actor = :a and #year = :y',
-    ExpressionAttributeNames: {
-      '#year': 'year'
-    },
-    ExpressionAttributeValues: {
-      ':a': pkvalue,
-      ':y' : Number(skvalue)
-    }
-  }
-  const docClient = new AWS.DynamoDB.DocumentClient();
-  // const docClient = new AWS.DynamoDB();
-  docClient.query(params2, function (err, data) {
-    console.log('Query secondary index by:', pkvalue, skvalue);
-    if (err) console.log('Error getting item by PK+SK', pkvalue, skvalue, obj2str(err));
-    else if (data.Items) console.log('Got item by PK', pkvalue, skvalue, data.Items);
-    else console.log('NO item by PK', pkvalue, skvalue, params, data);
-  })
-}
-
-function deleteTable(tablename) {
-  console.log(`Removing the ${table} table...`);
-  const dynamodb = new AWS.DynamoDB();
-  dynamodb.deleteTable({TableName: tablename}, function(err, data) {
-    if (err) {
-      console.error('Unable to delete table. Error JSON:', obj2str(err));
-    } else {
-      console.log('Deleted table.');
     }
   })
 }
@@ -229,30 +128,22 @@ function queryTelemundoIndex(pkvalue, skvalue) {
   const params = {
     TableName: 'TelemundoContent',
     IndexName: 'GSI-1',
-    KeyConditionExpression: 'child = :c and nid = :n',
-    ExpressionAttributeValues: {
-      ':c': {S: pkvalue},
-      ':n' : {S: skvalue}
+    KeyConditionExpression: '#child = :c and #nid = :n',
+    ExpressionAttributeNames: {
+      '#child': 'child',
+      '#nid': 'nid'
     },
-    ProjectionExpression: 'child, nid'
-  }
-  const params2 = {
-    TableName: 'TelemundoContent', IndexName: 'GSI-1',
-    KeyConditionExpression: 'child = :c and begins_with(#ctype, :t) ',
-    ExpressionAttributeNames: { '#ctype': 'ctype'},
     ExpressionAttributeValues: {
-     ':c': {S: pkvalue},
-     ':t': {S: skvalue}
-    },
-    ProjectionExpression: 'child, ctype'
+     ':c': pkvalue,
+     ':n': skvalue
+    }
   }
-  // const docClient = new AWS.DynamoDB.DocumentClient();
-  const docClient = new AWS.DynamoDB();
-  docClient.query(params2, function (err, data) {
+  const docClient = new AWS.DynamoDB.DocumentClient();
+  docClient.query(params, function (err, data) {
     console.log('Query secondary index by:', pkvalue, skvalue);
     if (err) console.log('Error getting item by PK+SK', pkvalue, skvalue, obj2str(err));
-    else if (data.Item) console.log('Got item by PK', pkvalue, skvalue, data.Item);
-    else console.log('NO item by PK', pkvalue, skvalue);
+    else if (data.Items) console.log('Got item by PK', pkvalue, skvalue, data.Items);
+    else console.log('NO item by PK', pkvalue, skvalue, params);
   })
 }
 
@@ -320,56 +211,6 @@ function transformP7(record, index) {
   return p7item
 }
 
-function loadMoviesTable() {
-  const docClient = new AWS.DynamoDB.DocumentClient();
-  console.log('Importing movies into DynamoDB. Please wait.');
-  const allMovies = readObject('./data/moviedata.json')
-  if (allMovies) {
-    allMovies.forEach(function(movie) {
-      var params = {
-        TableName: 'Movies',
-        Item: {
-          'year':  movie.year,
-          'title': movie.title,
-          'info':  movie.info
-          }
-      };
-      docClient.put(params, function(err, data) {
-        if (err) {
-          console.error('Unable to add movie', movie.title, '. Error JSON:', JSON.stringify(err, null, 2));
-        } else {
-          console.log('PutItem succeeded:', movie.title);
-        }
-      });
-    })
-  } // insert each movie
-}
-
-function getQParams(tablename, keymap) {
-  let params = {
-    TableName: tablename,
-    Key: {}
-  }
-  Object.keys(keymap).forEach(attr => params.Key[attr] = keymap[attr])
-}
-
-function showCredentials() {
-  AWS.config.getCredentials(function(err) {
-    if (err) console.log(err.stack);
-    // credentials not loaded
-    else {
-      console.log('Access key:', AWS.config.credentials.accessKeyId);
-      console.log('Secret access key:', AWS.config.credentials.secretAccessKey);
-      AWS.config.update({region: 'us-east-1'});
-      console.log('Region', AWS.config.region, obj2str({
-        dir: __dirname,
-        filespec: path.join(__dirname, '/settings.yaml'),
-        filetxt: readFile('./settings.yaml')
-      }))
-      console.log('Config', readConfig('./settings.yaml'))
-    }
-  })
-}
 /* --- General functions --- */
 function readFile(filepath) {
   let contents = null;
