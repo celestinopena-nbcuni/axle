@@ -7,15 +7,16 @@ const AWS = require('aws-sdk'),
 
 const cmdlineParams = arg(1)
 if (!cmdlineParams) {
-  console.log('usage: node starthere.js options');
+  console.log('usage: node tmundo.js options');
   console.log(' Options');
   console.log('  C = create table');
   console.log('  D = delete table');
+  console.log('  Demo = run demo scenario');
   console.log('  L filename = load the given json file into the database');
   console.log('  R filename = read the given json file');
   console.log('  Q pk sk = query table by PK and SK');
   console.log('  Q1 pk sk = query index1 by PK and SK');
-  console.log('  Q2 pk sk = query index2 by PK');
+  console.log('  Q2 pk = query index2 by PK');
 } else {
   hitDB(cmdlineParams)
 }
@@ -29,8 +30,7 @@ function hitDB(cmd = 'Q') {
         endpoint: 'http://localhost:8000'
       });
       if (cmd==='C') {
-        // console.log('Telemundo cfg', dbConfigs.telemundo);
-        createTable(dbConfigs.telemundoPlus, 'TelemundoContent')
+        createTable(dbConfigs.telemundo, 'TelemundoContent')
       } else if (cmd==='D') {
         deleteTelemundoTable()
       } else if (cmd==='L') {
@@ -41,6 +41,7 @@ function hitDB(cmd = 'Q') {
         const datafile = arg(2)
         if (datafile) readTelemundoDatafile(datafile, (arg(3) ? false : true))
       }
+      else if (cmd.toUpperCase()==='DEMO')  { runDemo() }
       else if (cmd.toUpperCase()==='Q')  { queryTelemundoTable(arg(2), arg(3)) }
       else if (cmd.toUpperCase()==='Q1') { queryTelemundoIndex(arg(2), arg(3)) }
       else if (cmd.toUpperCase()==='Q2') { queryTelemundoIndex(arg(2)) }
@@ -49,6 +50,30 @@ function hitDB(cmd = 'Q') {
       }
     }
   })
+}
+
+function runDemo() {
+  const docClient = new AWS.DynamoDB.DocumentClient();
+  const params = setIndex2params('none')
+  const topLevelObjectId = '0003001'
+  docClient.query(params, function (err, data) {
+    console.log('*** View all top-level objects and pick nid', topLevelObjectId);
+    if (err) console.log('Error getting item by PK+SK', obj2str(err));
+    else if (data.Items) {
+      console.log('Got item by PK', data.Items);
+      let topLevelObj = data.Items.find(item => item.nid == topLevelObjectId)
+      console.log('Found obj and add attribute to data', topLevelObj);
+      topLevelObj.data.color='greenish'
+      console.log('Changed object:', topLevelObj);
+      console.log('Find objects CONTAINING nid', topLevelObjectId);
+      queryTelemundoIndex(topLevelObjectId)
+    }
+    else console.log('NO item found by this index');
+  })
+  /* queryTelemundoIndex('none')
+  console.log('*** Now editing nid 0004001');
+  queryTelemundoTable('0004001', 'none')
+  */
 }
 
 function createTable(params, tablename) {
