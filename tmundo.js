@@ -14,7 +14,8 @@ if (!cmdlineParams) {
   console.log('  L filename = load the given json file into the database');
   console.log('  R filename = read the given json file');
   console.log('  Q pk sk = query table by PK and SK');
-  console.log('  QI pk sk = query index by PK and SK');
+  console.log('  Q1 pk sk = query index1 by PK and SK');
+  console.log('  Q2 pk sk = query index2 by PK');
 } else {
   hitDB(cmdlineParams)
 }
@@ -39,11 +40,11 @@ function hitDB(cmd = 'Q') {
       } else if (cmd==='R') {
         const datafile = arg(2)
         if (datafile) readTelemundoDatafile(datafile, (arg(3) ? false : true))
-      } else if (cmd.toUpperCase()==='Q') {
-        queryTelemundoTable(arg(2), arg(3))
-      } else if (cmd.toUpperCase()==='QI') {
-        queryTelemundoIndex(arg(2), arg(3))
-      } else {
+      }
+      else if (cmd.toUpperCase()==='Q')  { queryTelemundoTable(arg(2), arg(3)) }
+      else if (cmd.toUpperCase()==='Q1') { queryTelemundoIndex(arg(2), arg(3)) }
+      else if (cmd.toUpperCase()==='Q2') { queryTelemundoIndex(arg(2)) }
+      else {
         console.log('Unrecognized option:', cmd);
       }
     }
@@ -125,7 +126,18 @@ function queryTelemundoTable(pkvalue, skvalue) {
 
 function queryTelemundoIndex(pkvalue, skvalue) {
   if (!pkvalue) { console.log('Please provide PK value'); return; }
-  const params = {
+  const docClient = new AWS.DynamoDB.DocumentClient();
+  const params = (skvalue ? setIndex1params(pkvalue, skvalue) : setIndex2params(pkvalue))
+  docClient.query(params, function (err, data) {
+    console.log('Query secondary index by:', params);
+    if (err) console.log('Error getting item by PK+SK', obj2str(err));
+    else if (data.Items) console.log('Got item by PK', data.Items);
+    else console.log('NO item found by this index');
+  })
+}
+
+function setIndex1params(pkvalue, skvalue) {
+  return {
     TableName: 'TelemundoContent',
     IndexName: 'GSI-1',
     KeyConditionExpression: '#child = :c and #nid = :n',
@@ -138,13 +150,16 @@ function queryTelemundoIndex(pkvalue, skvalue) {
      ':n': skvalue
     }
   }
-  const docClient = new AWS.DynamoDB.DocumentClient();
-  docClient.query(params, function (err, data) {
-    console.log('Query secondary index by:', pkvalue, skvalue);
-    if (err) console.log('Error getting item by PK+SK', pkvalue, skvalue, obj2str(err));
-    else if (data.Items) console.log('Got item by PK', pkvalue, skvalue, data.Items);
-    else console.log('NO item by PK', pkvalue, skvalue, params);
-  })
+}
+
+function setIndex2params(pkvalue) {
+  return {
+    TableName: 'TelemundoContent',
+    IndexName: 'GSI-2',
+    KeyConditionExpression: '#child = :c',
+    ExpressionAttributeNames: { '#child': 'child' },
+    ExpressionAttributeValues: { ':c': pkvalue }
+  }
 }
 
 function deleteTelemundoTable() {

@@ -25,6 +25,7 @@ module.exports = {
       { AttributeName: 'nid', KeyType: 'HASH'},
       { AttributeName: 'child', KeyType: 'RANGE'}
     ],
+    ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 },
     GlobalSecondaryIndexes: [{
       IndexName: 'GSI-1',
       KeySchema: [
@@ -36,11 +37,13 @@ module.exports = {
         ReadCapacityUnits: 10,
         WriteCapacityUnits: 10
       }
-    }],
-    ProvisionedThroughput: {
-      ReadCapacityUnits: 10,
-      WriteCapacityUnits: 10
-    }
+    },
+    {
+      IndexName: 'GSI-2',
+      KeySchema: [{ AttributeName: 'child', KeyType: 'HASH' }],
+      Projection: { ProjectionType: 'ALL' },
+      ProvisionedThroughput: { ReadCapacityUnits: '10', WriteCapacityUnits: '10' }
+    }]
   },
   'movies': {
     TableName : 'Movies',
