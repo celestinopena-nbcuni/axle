@@ -35,7 +35,8 @@ module.exports = {
     AttributeDefinitions: [
       { AttributeName: 'nid', AttributeType: 'S' },
       { AttributeName: 'child', AttributeType: 'S' },
-      { AttributeName: 'ctype', AttributeType: 'S' }
+      { AttributeName: 'section', AttributeType: 'S' },
+      { AttributeName: 'seriesCtypeTitle', AttributeType: 'S' }
     ],
     KeySchema: [
       { AttributeName: 'nid', KeyType: 'HASH'},
@@ -47,6 +48,15 @@ module.exports = {
       KeySchema: [
         { AttributeName: 'child', KeyType: 'HASH' },
         { AttributeName: 'nid', KeyType: 'RANGE' }
+      ],
+      Projection: { ProjectionType: 'ALL' },
+      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
+    },
+    {
+      IndexName: 'GSI-2',
+      KeySchema: [
+        { AttributeName: 'section', KeyType: 'HASH' },
+        { AttributeName: 'seriesCtypeTitle', KeyType: 'RANGE' }
       ],
       Projection: { ProjectionType: 'ALL' },
       ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
