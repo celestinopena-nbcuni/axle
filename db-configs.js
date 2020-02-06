@@ -36,7 +36,8 @@ module.exports = {
       { AttributeName: 'nid', AttributeType: 'S' },
       { AttributeName: 'child', AttributeType: 'S' },
       { AttributeName: 'section', AttributeType: 'S' },
-      { AttributeName: 'seriesCtypeTitle', AttributeType: 'S' }
+      { AttributeName: 'seriesCtypeTitle', AttributeType: 'S' },
+      { AttributeName: 'seriesCtypeStatus', AttributeType: 'S' }
     ],
     KeySchema: [
       { AttributeName: 'nid', KeyType: 'HASH'},
@@ -44,7 +45,7 @@ module.exports = {
     ],
     ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 },
     GlobalSecondaryIndexes: [{
-      IndexName: 'GSI-1',
+      IndexName: 'ChildNode',
       KeySchema: [
         { AttributeName: 'child', KeyType: 'HASH' },
         { AttributeName: 'nid', KeyType: 'RANGE' }
@@ -53,14 +54,24 @@ module.exports = {
       ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
     },
     {
-      IndexName: 'GSI-2',
+      IndexName: 'SeriesTypeTitle',
       KeySchema: [
         { AttributeName: 'section', KeyType: 'HASH' },
         { AttributeName: 'seriesCtypeTitle', KeyType: 'RANGE' }
       ],
       Projection: { ProjectionType: 'ALL' },
       ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
-    }]
+    },
+    {
+      IndexName: 'SeriesTypeStatus',
+      KeySchema: [
+        { AttributeName: 'section', KeyType: 'HASH' },
+        { AttributeName: 'seriesCtypeStatus', KeyType: 'RANGE' }
+      ],
+      Projection: { ProjectionType: 'ALL' },
+      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
+    }
+  ]
   },
   'movies': {
     TableName : 'Movies',

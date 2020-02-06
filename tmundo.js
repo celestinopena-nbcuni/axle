@@ -15,8 +15,8 @@ if (!cmdlineParams) {
   console.log('  L filename = load the given json file into the database');
   console.log('  R filename = read the given json file');
   console.log('  Q pk sk = query table by PK and SK');
-  console.log('  Q1 pk sk = query index1 by PK and SK');
-  console.log('  Q2 pk = query index2 by PK');
+  console.log('  Q1 pk sk = query ChildNode index');
+  console.log('  QT pk sk = query SeriesTypeTitle index');
 } else {
   hitDB(cmdlineParams)
 }
@@ -44,7 +44,7 @@ function hitDB(cmd = 'Q') {
       else if (cmd==='DEMO')  { runDemo() }
       else if (cmd==='Q')  { queryTelemundoTable(arg(2), arg(3)) }
       else if (cmd==='Q1') { queryTelemundoIndex(setIndexParams(arg(2), arg(3))) }
-      else if (cmd==='Q2') { queryTelemundoIndex(setIndex2Params(arg(2), arg(3))) }
+      else if (cmd==='QT') { queryTelemundoIndex(setIndex2Params(arg(2), arg(3))) }
       else {
         console.log('Unrecognized option:', cmd);
       }
@@ -76,21 +76,13 @@ function runDemo() {
     }
     else console.log('NO item found by this index');
   })
-  /* queryTelemundoIndex('none')
-  console.log('*** Now editing nid 0004001');
-  queryTelemundoTable('0004001', 'none')
-  */
 }
 
 function createTable(params, tablename) {
-  console.log(`Create table '${tablename}'`, params);
   const dynamodb = new AWS.DynamoDB();
   dynamodb.createTable(params, function(err, data) {
-    if (err) {
-      console.error('Unable to create table. Error JSON:', JSON.stringify(err, null, 2));
-    } else {
-      console.log('Created table. Table description JSON:', JSON.stringify(data, null, 2));
-    }
+    if (err) console.error('Unable to create table:', obj2str(err));
+    else console.log(`Created table '${tablename}'`, obj2str(data));
   })
 }
 
@@ -187,7 +179,7 @@ function queryTelemundoIndex(queryParams) {
 function setIndexParams(pkvalue, skvalue) {
   let params = {
     TableName: 'TelemundoContent',
-    IndexName: 'GSI-1'
+    IndexName: 'ChildNode'
   }
   if (skvalue) {
     params.KeyConditionExpression = '#child = :c and #nid = :n'
@@ -204,7 +196,7 @@ function setIndexParams(pkvalue, skvalue) {
 function setIndex2Params(pkvalue, skvalue) {
   let params = {
     TableName: 'TelemundoContent',
-    IndexName: 'GSI-2'
+    IndexName: 'SeriesTypeTitle'
   }
   if (skvalue) {
     params.KeyConditionExpression = '#section = :pk AND begins_with(seriesCtypeTitle, :sk)'
