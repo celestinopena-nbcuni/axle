@@ -5,7 +5,7 @@ const AWS = require('aws-sdk'),
   _ = require('lodash'),
   dbConfigs = require('./db-configs')
 
-const cmdlineParams = arg(1)
+const cmdlineParams = arg(1).toUpperCase()
 if (!cmdlineParams) {
   console.log('usage: node tmundo.js options');
   console.log(' Options');
@@ -35,16 +35,15 @@ function hitDB(cmd = 'Q') {
         deleteTelemundoTable()
       } else if (cmd==='L') {
         const datafile = arg(2)
-        const doTransform = arg(3) ? false : true
-        if (datafile) loadTelemundoTable(datafile, doTransform)
+        if (datafile) loadTelemundoTable(datafile)
       } else if (cmd==='R') {
         const datafile = arg(2)
-        if (datafile) readTelemundoDatafile(datafile, (arg(3) ? false : true))
+        if (datafile) readTelemundoDatafile(datafile)
       }
-      else if (cmd.toUpperCase()==='DEMO')  { runDemo() }
-      else if (cmd.toUpperCase()==='Q')  { queryTelemundoTable(arg(2), arg(3)) }
-      else if (cmd.toUpperCase()==='Q1') { queryTelemundoIndex(arg(2), arg(3)) }
-      else if (cmd.toUpperCase()==='Q2') { queryTelemundoIndex(arg(2)) }
+      else if (cmd==='DEMO')  { runDemo() }
+      else if (cmd==='Q')  { queryTelemundoTable(arg(2), arg(3)) }
+      else if (cmd==='Q1') { queryTelemundoIndex(arg(2), arg(3)) }
+      else if (cmd==='Q2') { queryTelemundoIndex(arg(2)) }
       else {
         console.log('Unrecognized option:', cmd);
       }
@@ -88,7 +87,7 @@ function createTable(params, tablename) {
   })
 }
 
-function loadTelemundoTable(datafile, doTransform = true) {
+function loadTelemundoTable(datafile) {
   const p7content = readObject(datafile)
   if (!p7content) {
     console.log('Problem reading', datafile)
@@ -96,11 +95,11 @@ function loadTelemundoTable(datafile, doTransform = true) {
   }
   const docClient = new AWS.DynamoDB.DocumentClient();
   if (Array.isArray(p7content)) {
-    console.log(`Importing P7 data in ${datafile} into DynamoDB (transform data? ${doTransform?'Y':'N'})...`)
+    console.log(`Importing P7 data in ${datafile} into DynamoDB`)
     p7content.forEach(function(record, index) {
       docClient.put({
         TableName: 'TelemundoContent',
-        Item: doTransform ? transformP7(record) : record
+        Item: record
       }, function(err, data) {
         if (err) console.error('Unable to add P7 record. Error JSON:', obj2str(err));
         else console.log('Putitem succeeded for record', index);
@@ -109,7 +108,7 @@ function loadTelemundoTable(datafile, doTransform = true) {
   } else {
     docClient.put({
       TableName: 'TelemundoContent',
-      Item: doTransform ? transformP7(p7content) : p7content
+      Item: p7content
     }, function(err, data) {
       if (err) console.error('Unable to add P7 record. Error JSON:', obj2str(err));
       else console.log('Putitem succeeded for single record');
@@ -117,21 +116,21 @@ function loadTelemundoTable(datafile, doTransform = true) {
   }
 }
 
-function readTelemundoDatafile(datafile, doTransform = true) {
+function readTelemundoDatafile(datafile) {
   const p7content = readObject(datafile)
   if (!p7content) {
     console.log('Problem reading', datafile)
     return
   } else if (Array.isArray(p7content)) {
-    console.log(`Read import data in ${datafile} (do transform? ${doTransform?'Y':'N'})...`)
+    console.log(`Read import data in ${datafile}`)
     p7content.forEach(function(record, index) {
-      if (doTransform) transformP7(record, index)
-      else console.log('Record', index, obj2str(record));
+      // if (doTransform) transformP7(record, index)
+      console.log('Record', index, obj2str(record));
     })
   } else {
-    console.log(`Read import object in ${datafile} (do transform? ${doTransform?'Y':'N'})...`)
-    if (doTransform) transformP7(p7content, 0)
-    else console.log('Record', obj2str(p7content));
+    console.log(`Read import object in ${datafile}`)
+    // if (doTransform) transformP7(p7content, 0)
+    console.log('Record', obj2str(p7content));
   }
 }
 
