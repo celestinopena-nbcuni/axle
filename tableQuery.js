@@ -16,9 +16,20 @@ module.exports = (function () {
         ExpressionAttributeNames: {}
       }
       config.ExpressionAttributeNames[pkPlaceholder] = pk
-      config.ExpressionAttributeNames[skPlaceholder] = sk
+      function eq(pkvalue, skvalue) {
+        if (skvalue) {
+          config.ExpressionAttributeNames[skPlaceholder] = sk
+          config.KeyConditionExpression = `${pkPlaceholder} = :pk AND ${skPlaceholder} = :sk`
+          config.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
+        } else {
+          config.KeyConditionExpression = `${pkPlaceholder} = :pk`
+          config.ExpressionAttributeValues = { ':pk': pkvalue }
+        }
+        return config
+      }
       function beginsWith(pkvalue, skvalue) {
         if (skvalue) {
+          config.ExpressionAttributeNames[skPlaceholder] = sk
           config.KeyConditionExpression = `${pkPlaceholder} = :pk AND begins_with(${skPlaceholder}, :sk)`
           config.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
         } else {
@@ -29,6 +40,7 @@ module.exports = (function () {
       }
       function contains(pkvalue, skvalue) {
         if (skvalue) {
+          config.ExpressionAttributeNames[skPlaceholder] = sk
           config.KeyConditionExpression = `${pkPlaceholder} = :pk AND contains(${skPlaceholder}, :sk)`
           config.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
         } else {
@@ -39,6 +51,7 @@ module.exports = (function () {
       }
       function endsWith(pkvalue, skvalue) {
         if (skvalue) {
+          config.ExpressionAttributeNames[skPlaceholder] = sk
           config.KeyConditionExpression = `${pkPlaceholder} = :pk AND ends_with(${skPlaceholder}, :sk)`
           config.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
         } else {
@@ -48,6 +61,7 @@ module.exports = (function () {
         return config
       }
       return {
+        eq: eq,
         beginsWith: beginsWith,
         contains: contains,
         endsWith: endsWith
