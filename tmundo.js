@@ -5,6 +5,9 @@ const AWS = require('aws-sdk'),
   util = require('./general')
 
 const tlmdQuery = dbQuery.init(dbConfigs.telemundo)
+const titleIndex = tlmdQuery.getIndexQuery('SeriesTypeTitle')
+const statusIndex = tlmdQuery.getIndexQuery('SeriesTypeStatus')
+const childIndex = tlmdQuery.getIndexQuery('ChildNode')
 const cmdlineParams = util.arg(1).toUpperCase()
 if (!cmdlineParams) {
   console.log('usage: node tmundo.js options');
@@ -43,8 +46,17 @@ function hitDB(cmd = 'Q') {
       }
       else if (cmd==='DEMO')  { runDemo(util.arg(2) || 'taxonomy') }
       else if (cmd==='Q')  { queryTelemundoTable(util.arg(2), util.arg(3)) }
-      else if (cmd==='Q1') { queryTelemundoIndex(setIndexParams(util.arg(2), util.arg(3))) }
-      else if (cmd==='QT') { queryTelemundoIndex(setIndex2Params(util.arg(2), util.arg(3))) }
+      else if (cmd==='Q1') {
+        const pk=util.arg(2)
+        const sk=util.arg(3)
+        let qparams = childIndex.eq(pk, sk)
+        // queryTelemundoIndex(setIndexParams(pk, sk))
+        queryTelemundoIndex(qparams)
+      }
+      else if (cmd==='QT') {
+        // queryTelemundoIndex(setIndex2Params(util.arg(2), util.arg(3)))
+        queryTelemundoIndex(titleIndex.beginsWith(util.arg(2), util.arg(3)))
+      }
       else {
         console.log('Unrecognized option:', cmd);
       }

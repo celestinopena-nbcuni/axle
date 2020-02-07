@@ -1,73 +1,54 @@
-module.exports = (function () {
-  function init(dbConfig) {
-    function getIndexQuery(indexName) {
-      const gsi = dbConfig.GlobalSecondaryIndexes.find(item => item.IndexName===indexName)
-      if (!gsi) return null
-      const hkey = gsi.KeySchema.find(item => item.KeyType=='HASH')
-      const skey = gsi.KeySchema.find(item => item.KeyType=='RANGE')
-      const pk = hkey ? hkey.AttributeName : null
-      const sk = skey ? skey.AttributeName : null
-      if (!(pk && sk)) return null
-      const pkPlaceholder = `#${pk}`
-      const skPlaceholder = `#${sk}`
-      let config = {
+/* This library provides an object which facilitates the generation of query parameter objects. */
+function init(dbConfig) {
+  function getIndexQuery(indexName) {
+    const gsi = dbConfig.GlobalSecondaryIndexes.find(item => item.IndexName===indexName)
+    if (!gsi) return null
+    const hkey = gsi.KeySchema.find(item => item.KeyType=='HASH')
+    const skey = gsi.KeySchema.find(item => item.KeyType=='RANGE')
+    const pk = hkey ? hkey.AttributeName : null
+    const sk = skey ? skey.AttributeName : null
+    if (!(pk && sk)) return null
+    const pkPlaceholder = `#${pk}`
+    const skPlaceholder = `#${sk}`
+    function eq(pkvalue, skvalue) {
+      let params = {
         TableName: dbConfig.TableName,
         IndexName: indexName,
         ExpressionAttributeNames: {}
       }
-      config.ExpressionAttributeNames[pkPlaceholder] = pk
-      function eq(pkvalue, skvalue) {
-        if (skvalue) {
-          config.ExpressionAttributeNames[skPlaceholder] = sk
-          config.KeyConditionExpression = `${pkPlaceholder} = :pk AND ${skPlaceholder} = :sk`
-          config.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
-        } else {
-          config.KeyConditionExpression = `${pkPlaceholder} = :pk`
-          config.ExpressionAttributeValues = { ':pk': pkvalue }
-        }
-        return config
+      params.ExpressionAttributeNames[pkPlaceholder] = pk
+      if (skvalue) {
+        params.ExpressionAttributeNames[skPlaceholder] = sk
+        params.KeyConditionExpression = `${pkPlaceholder} = :pk AND ${skPlaceholder} = :sk`
+        params.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
+      } else {
+        params.KeyConditionExpression = `${pkPlaceholder} = :pk`
+        params.ExpressionAttributeValues = { ':pk': pkvalue }
       }
-      function beginsWith(pkvalue, skvalue) {
-        if (skvalue) {
-          config.ExpressionAttributeNames[skPlaceholder] = sk
-          config.KeyConditionExpression = `${pkPlaceholder} = :pk AND begins_with(${skPlaceholder}, :sk)`
-          config.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
-        } else {
-          config.KeyConditionExpression = `${pkPlaceholder} = :pk`
-          config.ExpressionAttributeValues = { ':pk': pkvalue }
-        }
-        return config
+      return params
+    }
+    function beginsWith(pkvalue, skvalue) {
+      let params = {
+        TableName: dbConfig.TableName,
+        IndexName: indexName,
+        ExpressionAttributeNames: {}
       }
-      function contains(pkvalue, skvalue) {
-        if (skvalue) {
-          config.ExpressionAttributeNames[skPlaceholder] = sk
-          config.KeyConditionExpression = `${pkPlaceholder} = :pk AND contains(${skPlaceholder}, :sk)`
-          config.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
-        } else {
-          config.KeyConditionExpression = `${pkPlaceholder} = :pk`
-          config.ExpressionAttributeValues = { ':pk': pkvalue }
-        }
-        return config
+      params.ExpressionAttributeNames[pkPlaceholder] = pk
+      if (skvalue) {
+        params.ExpressionAttributeNames[skPlaceholder] = sk
+        params.KeyConditionExpression = `${pkPlaceholder} = :pk AND begins_with(${skPlaceholder}, :sk)`
+        params.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
+      } else {
+        params.KeyConditionExpression = `${pkPlaceholder} = :pk`
+        params.ExpressionAttributeValues = { ':pk': pkvalue }
       }
-      function endsWith(pkvalue, skvalue) {
-        if (skvalue) {
-          config.ExpressionAttributeNames[skPlaceholder] = sk
-          config.KeyConditionExpression = `${pkPlaceholder} = :pk AND ends_with(${skPlaceholder}, :sk)`
-          config.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
-        } else {
-          config.KeyConditionExpression = `${pkPlaceholder} = :pk`
-          config.ExpressionAttributeValues = { ':pk': pkvalue }
-        }
-        return config
-      }
-      return {
-        eq: eq,
-        beginsWith: beginsWith,
-        contains: contains,
-        endsWith: endsWith
-      }
-    } // getIndexQuery
-    return { getIndexQuery: getIndexQuery }
-  } // init
-  return { init: init }
-})()
+      return params
+    }
+    return {
+      eq: eq,
+      beginsWith: beginsWith
+    }
+  } // getIndexQuery
+  return { getIndexQuery: getIndexQuery }
+} // init
+module.exports = { init: init }
