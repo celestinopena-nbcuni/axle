@@ -1,7 +1,4 @@
 const AWS = require('aws-sdk'),
-  path = require('path'),
-  fs = require('fs'),
-  YAML = require('yaml'),
   _ = require('lodash'),
   dbConfigs = require('./db-configs'),
   dbQuery = require('./tableQuery'),

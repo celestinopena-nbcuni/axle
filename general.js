@@ -1,4 +1,8 @@
 module.exports = (function() {
+  const path = require('path'),
+    fs = require('fs'),
+    YAML = require('yaml')
+
   function readFile(filepath) {
     let contents = null;
     try {
