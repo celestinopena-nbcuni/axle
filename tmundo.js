@@ -3,7 +3,8 @@ const AWS = require('aws-sdk'),
   fs = require('fs'),
   YAML = require('yaml'),
   _ = require('lodash'),
-  dbConfigs = require('./db-configs')
+  dbConfigs = require('./db-configs'),
+  dbQuery = require('./tableQuery')
 
 const cmdlineParams = arg(1).toUpperCase()
 if (!cmdlineParams) {
@@ -30,7 +31,7 @@ function hitDB(cmd = 'Q') {
         endpoint: 'http://localhost:8000'
       });
       if (cmd==='C') {
-        createTable(dbConfigs.telemundo02, 'TelemundoContent')
+        createTable(dbConfigs.telemundo, 'TelemundoContent')
       } else if (cmd==='D') {
         deleteTelemundoTable()
       } else if (cmd==='L') {
@@ -42,6 +43,7 @@ function hitDB(cmd = 'Q') {
         if (datafile) readTelemundoDatafile(datafile)
       }
       else if (cmd==='DEMO')  { runDemo() }
+      else if (cmd==='X')  { runX() }
       else if (cmd==='Q')  { queryTelemundoTable(arg(2), arg(3)) }
       else if (cmd==='Q1') { queryTelemundoIndex(setIndexParams(arg(2), arg(3))) }
       else if (cmd==='QT') { queryTelemundoIndex(setIndex2Params(arg(2), arg(3))) }
@@ -53,6 +55,20 @@ function hitDB(cmd = 'Q') {
 }
 
 function runDemo() {
+  getQueryIndex({
+    TableName: 'TelemundoContent',
+    IndexName: 'ChildNode',
+    KeyConditionExpression: '#child = :c',
+    ExpressionAttributeNames: { '#child': 'child' },
+    ExpressionAttributeValues: { ':c': 'none' }
+  }).then(function(data) {
+    console.log(`Query returned ${data.Items.length} with the following taxonomies`, data.Items.find(item => item.ctype=='taxonomy'));
+  }, function(error) {
+    console.log('Query failed:', obj2str(error));
+  })
+}
+
+function runDemo1() {
   const docClient = new AWS.DynamoDB.DocumentClient();
   const params =  {
     TableName: 'TelemundoContent',
@@ -131,7 +147,6 @@ function loadTransformTable(datafile) {
       else console.log('Putitem succeeded for record', index);
     })
   })
-
 }
 
 function readTelemundoDatafile(datafile) {
@@ -176,6 +191,13 @@ function queryTelemundoIndex(queryParams) {
   })
 }
 
+function getQueryIndex(queryParams) {
+  return new Promise((resolve, reject) => {
+    const docClient = new AWS.DynamoDB.DocumentClient();
+    docClient.query(queryParams, function (err, data) { if (err) reject(err); resolve(data) })
+  })
+}
+
 function setIndexParams(pkvalue, skvalue) {
   let params = {
     TableName: 'TelemundoContent',
@@ -208,6 +230,18 @@ function setIndex2Params(pkvalue, skvalue) {
     params.ExpressionAttributeValues = { ':pk': pkvalue }
   }
   return params
+}
+
+function runX() {
+  const tq = dbQuery.init(dbConfigs.telemundo)
+  const gsi01 = tq.getIndexQuery('SeriesTypeTitle')
+  const gsi02 = tq.getIndexQuery('SeriesTypeStatus')
+  if (gsi01) console.log('gsi01 beginsW', gsi01.beginsWith('myPK', 'mySKvalue'));
+  if (gsi02) {
+    console.log('gsi02 contains', gsi02.contains('myPK', 'mySKvalue'));
+    console.log('gsi02 endsW', gsi02.endsWith('myPK', 'mySKvalue'));
+  }
+  console.log('Try bogus index', tq.getIndexQuery('Bogons'));
 }
 
 function deleteTelemundoTable() {

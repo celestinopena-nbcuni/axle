@@ -1,5 +1,5 @@
 module.exports = {
-  'telemundo': {
+  'telemundo1': {
     TableName: 'TelemundoContent',
     AttributeDefinitions: [
       { AttributeName: 'nid', AttributeType: 'S' },
@@ -30,7 +30,7 @@ module.exports = {
       ProvisionedThroughput: { ReadCapacityUnits: '10', WriteCapacityUnits: '10' }
     }]
   },
-  'telemundo02': {
+  'telemundo': {
     TableName: 'TelemundoContent',
     AttributeDefinitions: [
       { AttributeName: 'nid', AttributeType: 'S' },
