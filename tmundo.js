@@ -20,6 +20,8 @@ if (!cmdlineParams) {
   console.log('  Q pk sk = query table by PK and SK');
   console.log('  Q1 pk sk = query ChildNode index');
   console.log('  QT pk sk = query SeriesTypeTitle index');
+  console.log('  QS pk sk = query SeriesTypeStatus index');
+  console.log('  QSF pk sk = query SeriesTypeStatus index using Filter (Unpublished)');
 } else {
   hitDB(cmdlineParams)
 }
@@ -49,8 +51,17 @@ function hitDB(cmd = 'Q') {
       else if (cmd==='Q1') {
         const pk=util.arg(2)
         const sk=util.arg(3)
-        let qparams = childIndex.eq(pk, sk)
         // queryTelemundoIndex(setIndexParams(pk, sk))
+        queryTelemundoIndex(childIndex.eq(pk, sk))
+      }
+      else if (cmd==='QS') {
+        queryTelemundoIndex(statusIndex.beginsWith(util.arg(2), util.arg(3)))
+      }
+      else if (cmd==='QSF') {
+        let qparams = statusIndex.beginsWith(util.arg(2), util.arg(3))
+        qparams.FilterExpression = '#status = :stat'
+        qparams.ExpressionAttributeNames['#status'] = 'status'
+        qparams.ExpressionAttributeValues[':stat'] = util.arg(4) || '0'
         queryTelemundoIndex(qparams)
       }
       else if (cmd==='QT') {
