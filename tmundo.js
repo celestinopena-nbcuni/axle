@@ -4,6 +4,12 @@ const AWS = require('aws-sdk'),
   dbQuery = require('./tableQuery'),
   util = require('./general')
 
+const cjp=require('./data/utils.js')
+
+const mainTable = 'TelemundoCW'
+const cwQuery = dbQuery.init(dbConfigs.telemundoCW)
+const gsi1Index = cwQuery.getIndexQuery('ParentNode')
+const gsi2Index = cwQuery.getIndexQuery('ItemTypeParentIndex')
 const tlmdQuery = dbQuery.init(dbConfigs.telemundo)
 const titleIndex = tlmdQuery.getIndexQuery('SeriesTypeTitle')
 const statusIndex = tlmdQuery.getIndexQuery('SeriesTypeStatus')
@@ -12,10 +18,10 @@ const cmdlineParams = util.arg(1).toUpperCase()
 if (!cmdlineParams) {
   console.log('usage: node tmundo.js options');
   console.log(' Options');
-  console.log('  C = create table');
-  console.log('  D = delete table');
+  console.log('  C tablename = create table');
+  console.log('  D tablename = delete table');
   console.log('  Demo = run demo scenario');
-  console.log('  L filename = load the given json file into the database');
+  console.log('  L filename tablename = load the given json file into a table');
   console.log('  R filename = read the given json file');
   console.log('  Q pk sk = query table by PK and SK');
   console.log('  Q1 pk sk = query ChildNode index');
@@ -35,27 +41,43 @@ function hitDB(cmd = 'Q') {
         endpoint: 'http://localhost:8000'
       });
       if (cmd==='C') {
-        createTable(dbConfigs.telemundo, 'TelemundoContent')
+        const tablename=util.arg(2)
+        if (tablename) {
+          if (dbConfigs[tablename]) createTable(dbConfigs[tablename], tablename)
+          else console.log('No table defined in configuration:', tablename);
+        }
       } else if (cmd==='D') {
-        deleteTelemundoTable()
+        const configname=util.arg(2)
+        if (configname) {
+          if (dbConfigs[configname]) deleteTable(dbConfigs[configname].TableName)
+          else console.log('No table defined in configuration:', tablename);
+        }
       } else if (cmd==='L') {
         const datafile = util.arg(2)
-        // if (datafile) loadTelemundoTable(datafile)
-        if (datafile) loadTransformTable(datafile)
+        // if (datafile) loadTable(datafile, util.arg(3))
+        if (datafile) loadCWTable(datafile)
       } else if (cmd==='R') {
         const datafile = util.arg(2)
         if (datafile) readTelemundoDatafile(datafile)
       }
-      else if (cmd==='DEMO')  { runDemo(util.arg(2) || 'taxonomy') }
-      else if (cmd==='Q')  { queryTelemundoTable(util.arg(2), util.arg(3)) }
+      else if (cmd==='DEMO') { runDemo(util.arg(2) || 'taxonomy') }
+      else if (cmd==='Q') {
+        const pk=util.arg(2)
+        // let sk=util.arg(3); if (!sk) sk = pk
+        const shortView = util.arg(3)
+        const cols = 'datePublished, itemType, title, slug'
+        queryTelemundoTable(pk, pk, shortView?cols:null)
+      }
       else if (cmd==='Q1') {
         const pk=util.arg(2)
         const sk=util.arg(3)
         // queryTelemundoIndex(setIndexParams(pk, sk))
-        queryTelemundoIndex(childIndex.eq(pk, sk))
+        // queryTelemundoIndex(childIndex.eq(pk, sk))
+        queryTelemundoIndex(gsi1Index.eq(pk, sk, 'datePublished, itemType, title'))
       }
       else if (cmd==='QS') {
-        queryTelemundoIndex(statusIndex.beginsWith(util.arg(2), util.arg(3)))
+        // queryTelemundoIndex(statusIndex.beginsWith(util.arg(2), util.arg(3)))
+        queryTelemundoIndex(gsi2Index.beginsWith(util.arg(2), util.arg(3), 'datePublished, itemType, title, slug'))
       }
       else if (cmd==='QSF') {
         let qparams = statusIndex.beginsWith(util.arg(2), util.arg(3))
@@ -94,7 +116,38 @@ function createTable(params, tablename) {
   })
 }
 
-function loadTelemundoTable(datafile) {
+function loadCWTable(datafile) {
+  const p7content = util.readObject(datafile)
+  if (!p7content) {
+    console.log('Problem reading', datafile)
+    return
+  }
+  const docClient = new AWS.DynamoDB.DocumentClient();
+  const tablename = 'TelemundoCW'
+  let parentRecord = {}
+  const newitem = doTransform(p7content)
+  if (newitem.isParent) parentRecord = null
+  else {
+    delete newitem.isParent
+    Object.assign(parentRecord, newitem)
+  }
+  docClient.put({
+    TableName: tablename,
+    Item: newitem
+  }, function(err, data) {
+    if (err) console.error('Unable to add record. Error JSON:', util.obj2str(err));
+    else console.log('Putitem succeeded for single record');
+  })
+  if (parentRecord) {
+    parentRecord.programUuid = parentRecord.uuid
+    docClient.put({ TableName: tablename, Item: parentRecord }, function(err, data) {
+      if (err) console.error('Unable to add record. Error JSON:', util.obj2str(err));
+      else console.log('Putitem succeeded for single record');
+    })
+  }
+}
+
+function loadTable(datafile, tablename) {
   const p7content = util.readObject(datafile)
   if (!p7content) {
     console.log('Problem reading', datafile)
@@ -102,10 +155,10 @@ function loadTelemundoTable(datafile) {
   }
   const docClient = new AWS.DynamoDB.DocumentClient();
   if (Array.isArray(p7content)) {
-    console.log(`Importing P7 data in ${datafile} into DynamoDB`)
+    console.log(`Importing data in ${datafile} into table ${tablename}`)
     p7content.forEach(function(record, index) {
       docClient.put({
-        TableName: 'TelemundoContent',
+        TableName: tablename,
         Item: record
       }, function(err, data) {
         if (err) console.error('Unable to add P7 record. Error JSON:', util.obj2str(err));
@@ -113,15 +166,13 @@ function loadTelemundoTable(datafile) {
       })
     })
   } else {
-    docClient.put({
-      TableName: 'TelemundoContent',
-      Item: p7content
-    }, function(err, data) {
-      if (err) console.error('Unable to add P7 record. Error JSON:', util.obj2str(err));
+    docClient.put({ TableName: tablename, Item: p7content }, function(err, data) {
+      if (err) console.error('Unable to add record. Error JSON:', util.obj2str(err));
       else console.log('Putitem succeeded for single record');
     })
   }
 }
+
 function loadTransformTable(datafile) {
   const p7content = util.readObject(datafile)
   if (!p7content) {
@@ -149,21 +200,34 @@ function readTelemundoDatafile(datafile) {
   } else if (Array.isArray(p7content)) {
     console.log(`Read import data in ${datafile}`)
     p7content.forEach(function(record, index) {
-      // if (doTransform) transformP7(record, index)
       console.log('Record', index, util.obj2str(record));
     })
   } else {
-    console.log(`Read import object in ${datafile}`)
-    // if (doTransform) transformP7(p7content, 0)
-    console.log('Record', util.obj2str(p7content));
+    console.log(`Read import object in ${datafile}`, Object.keys(p7content))
+    const newRecord = doTransform(p7content)
+    cjp.survey(newRecord)
   }
 }
 
-function queryTelemundoTable(pkvalue, skvalue) {
+function doTransform(record) {
+  const mainFields = util.copyFields(record, ['data', 'itemType', 'uuid', 'slug', 'title', 'media', 'categories', 'tags', 'published', 'relatedSeries', 'currentSeason', 'datePublished', 'references', 'frontends'])
+  if (!mainFields.data) {
+    console.log('No data attrib present, now adding...')
+    mainFields.data = util.copyFields(record, ['title', 'short_description', 'long_description', 'promoDescription', 'promoTitle', 'seriesType', 'promoKicker', 'genre', 'links', 'customFields'])
+  }
+  mainFields.programUuid = (record.program && record.program.programUuid) ? record.program.programUuid  : record.uuid
+  mainFields.isParent = (mainFields.programUuid == mainFields.uuid)
+  if (mainFields.datePublished) mainFields.datePublished = util.convertUnixDate(mainFields.datePublished)
+  return util.noblanks(mainFields)
+}
+
+function queryTelemundoTable(pkvalue, skvalue, projection) {
   if (!pkvalue) { console.log('Please provide PK value'); return; }
   const sortKeyDisplay = (skvalue || 'No sort key value provided')
-  let params = { TableName: 'TelemundoContent', Key: { 'nid': pkvalue }}
-  if (skvalue) { params.Key.child = skvalue }
+  if (!mainTable) return
+  let params = { TableName: mainTable, Key: { 'uuid': pkvalue }}
+  if (skvalue) { params.Key.programUuid = skvalue }
+  if (projection) params.ProjectionExpression = projection
   const docClient = new AWS.DynamoDB.DocumentClient();
   docClient.get(params, function (err, data) {
     console.log('Query main table by:', pkvalue, sortKeyDisplay);
@@ -224,10 +288,10 @@ function setIndex2Params(pkvalue, skvalue) {
   return params
 }
 
-function deleteTelemundoTable() {
-  console.log('Removing the TelemundoContent table...');
+function deleteTable(tablename) {
+  console.log(`Removing the ${tablename} table...`);
   const dynamodb = new AWS.DynamoDB();
-  dynamodb.deleteTable({TableName: 'TelemundoContent'}, function(err, data) {
+  dynamodb.deleteTable({TableName: tablename}, function(err, data) {
     if (err) {
       console.error('Unable to delete table. Error JSON:', util.obj2str(err));
     } else {
@@ -256,39 +320,30 @@ function transformP7(record, index) {
     return
   }
   if (record.title) p7item.title = record.title
-  // else console.log(`Record ${index} has no title`);
   if (record.status) p7item.status = record.status
-  // else console.log(`Record ${index} has no status`);
   if (record.created) {
     p7item.Create_DT = new Date(record.created * 1000).toLocaleString()
   }
-  // else console.log(`Record ${index} has no create date`);
   if (record.changed) {
     p7item.Updated_DT = new Date(record.changed * 1000).toLocaleString()
   }
-  // else console.log(`Record ${index} has no updated date`);
   if (_.has(record, 'field_publish_date.und[0]')) {
     p7item.Published_DT = record.field_publish_date.und[0].value
   }
-  // else console.log(`Record ${index} has no publish date`);
   if (_.has(record, 'field_byline.und[0]')) {
     p7item.Byline = record.field_byline.und[0].value
   }
-  // else console.log(`Record ${index} has no byline`);
   if (_.has(record, 'field_categories.und')) {
     p7item.Categories = record.field_categories.und.map(item => item.tid).join(',')
   }
-  // else console.log(`Record ${index} has no categories`);
   if (_.has(record, 'field_keywords.und')) {
     p7item.Keywords = record.field_keywords.und.map(item => item.tid).join(',')
   }
-  // else console.log(`Record ${index} has no keywords`);
   if (_.has(record, 'field_show_season_episode.und[0]')) {
     p7item.Show = _.get(record, 'field_show_season_episode.und[0].show', '-')
     p7item.Season = _.get(record, 'field_show_season_episode.und[0].season', '-')
     p7item.Episode = _.get(record, 'field_show_season_episode.und[0].episode', '-')
   }
-  // else console.log(`Record ${index} has no show/season/episode`);
   // console.log(`Record ${index} =`, util.propstr(p7item, ['PK', 'SK']))
   console.log(`Record ${index || ''} =`, util.obj2str(p7item)); console.log('');
   return p7item

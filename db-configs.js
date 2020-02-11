@@ -73,6 +73,56 @@ module.exports = {
     }
   ]
   },
+  'telemundoCW': {
+    TableName: 'TelemundoCW',
+    AttributeDefinitions: [
+      { AttributeName: 'uuid', AttributeType: 'S' },
+      { AttributeName: 'programUuid', AttributeType: 'S' },
+      { AttributeName: 'itemType', AttributeType: 'S' },
+      { AttributeName: 'datePublished', AttributeType: 'S' }
+    ],
+    KeySchema: [
+      { AttributeName: 'uuid', KeyType: 'HASH'},
+      { AttributeName: 'programUuid', KeyType: 'RANGE'}
+    ],
+    ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 },
+    GlobalSecondaryIndexes: [{
+      IndexName: 'ParentNode',
+      KeySchema: [
+        { AttributeName: 'programUuid', KeyType: 'HASH' },
+        { AttributeName: 'uuid', KeyType: 'RANGE' }
+      ],
+      Projection: { ProjectionType: 'ALL' },
+      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
+    },
+    {
+      IndexName: 'ItemTypeParentIndex',
+      KeySchema: [
+        { AttributeName: 'itemType', KeyType: 'HASH' },
+        { AttributeName: 'programUuid', KeyType: 'RANGE' }
+      ],
+      Projection: { ProjectionType: 'ALL' },
+      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
+    },
+    {
+      IndexName: 'ChildNodeIndex',
+      KeySchema: [
+        { AttributeName: 'uuid', KeyType: 'HASH' }
+      ],
+      Projection: { ProjectionType: 'ALL' },
+      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
+    },
+    {
+      IndexName: 'ItemTypeIndex',
+      KeySchema: [
+        { AttributeName: 'itemType', KeyType: 'HASH' },
+        { AttributeName: 'datePublished', KeyType: 'RANGE' }
+      ],
+      Projection: { ProjectionType: 'ALL' },
+      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
+    }
+  ]
+  },
   'movies': {
     TableName : 'Movies',
     KeySchema: [

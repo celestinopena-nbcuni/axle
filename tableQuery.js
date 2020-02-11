@@ -10,7 +10,7 @@ function init(dbConfig) {
     if (!(pk && sk)) return null
     const pkPlaceholder = `#${pk}`
     const skPlaceholder = `#${sk}`
-    function eq(pkvalue, skvalue) {
+    function eq(pkvalue, skvalue, projection) {
       let params = {
         TableName: dbConfig.TableName,
         IndexName: indexName,
@@ -25,9 +25,10 @@ function init(dbConfig) {
         params.KeyConditionExpression = `${pkPlaceholder} = :pk`
         params.ExpressionAttributeValues = { ':pk': pkvalue }
       }
+      if (projection) params.ProjectionExpression = projection
       return params
     }
-    function beginsWith(pkvalue, skvalue) {
+    function beginsWith(pkvalue, skvalue, projection) {
       let params = {
         TableName: dbConfig.TableName,
         IndexName: indexName,
@@ -42,6 +43,7 @@ function init(dbConfig) {
         params.KeyConditionExpression = `${pkPlaceholder} = :pk`
         params.ExpressionAttributeValues = { ':pk': pkvalue }
       }
+      if (projection) params.ProjectionExpression = projection
       return params
     }
     return {
