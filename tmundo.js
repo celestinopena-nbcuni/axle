@@ -86,11 +86,10 @@ function hitDB(cmd = 'Q') {
         console.log('*** Find child records ***');
         queryTelemundoIndex(gsi3Index.eq(util.arg(2), null, '#uuid, programUuid, isParent, datePublished, itemType, title, slug'))
       }
-
       else if (cmd==='QS') {
         // queryTelemundoIndex(statusIndex.beginsWith(util.arg(2), util.arg(3)))
         console.log('*** Find content types under a record ***');
-        queryTelemundoIndex(gsi2Index.beginsWith(util.arg(2), util.arg(3), 'datePublished, itemType, title, slug'))
+        queryTelemundoIndex(gsi2Index.eq(util.arg(2), util.arg(3), '#uuid, datePublished, itemType, title, slug'))
 
         // console.log('*** Find records containing a record ***');
         // queryTelemundoIndex(gsi3Index.eq(util.arg(2), null, 'datePublished, itemType, title, slug'))
@@ -105,6 +104,12 @@ function hitDB(cmd = 'Q') {
       else if (cmd==='QT') {
         // queryTelemundoIndex(setIndex2Params(util.arg(2), util.arg(3)))
         queryTelemundoIndex(titleIndex.beginsWith(util.arg(2), util.arg(3)))
+      }
+      else if (cmd==='X') {
+        const pk=util.arg(2)
+        const sk=util.arg(3)
+        let qparams = gsi1Index.$eq(pk, sk).$project('#uuid, isParent, datePublished, itemType, title').$filter('#status = :status', 'status', util.arg(4)).getParams()
+        console.log('Our index param obj:', qparams);
       }
       else {
         console.log('Unrecognized option:', cmd);
