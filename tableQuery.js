@@ -7,14 +7,16 @@ function init(dbConfig) {
     const skey = gsi.KeySchema.find(item => item.KeyType=='RANGE')
     const pk = hkey ? hkey.AttributeName : null
     const sk = skey ? skey.AttributeName : null
-    if (!(pk && sk)) return null
+    if (!pk) return null
     const pkPlaceholder = `#${pk}`
     const skPlaceholder = `#${sk}`
     function eq(pkvalue, skvalue, projection) {
       let params = {
         TableName: dbConfig.TableName,
         IndexName: indexName,
-        ExpressionAttributeNames: {}
+        ExpressionAttributeNames: {
+          '#uuid': 'uuid'
+        }
       }
       params.ExpressionAttributeNames[pkPlaceholder] = pk
       if (skvalue) {
@@ -32,7 +34,7 @@ function init(dbConfig) {
       let params = {
         TableName: dbConfig.TableName,
         IndexName: indexName,
-        ExpressionAttributeNames: {}
+        ExpressionAttributeNames: {'#uuid': 'uuid'}
       }
       params.ExpressionAttributeNames[pkPlaceholder] = pk
       if (skvalue) {
@@ -46,9 +48,13 @@ function init(dbConfig) {
       if (projection) params.ProjectionExpression = projection
       return params
     }
+    function toString() {
+      return `Index ${indexName} containing key ${pk}, ${sk}`
+    }
     return {
       eq: eq,
-      beginsWith: beginsWith
+      beginsWith: beginsWith,
+      toString: toString
     }
   } // getIndexQuery
   return { getIndexQuery: getIndexQuery }

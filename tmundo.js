@@ -10,6 +10,8 @@ const mainTable = 'TelemundoCW'
 const cwQuery = dbQuery.init(dbConfigs.telemundoCW)
 const gsi1Index = cwQuery.getIndexQuery('ParentNode')
 const gsi2Index = cwQuery.getIndexQuery('ItemTypeParentIndex')
+const gsi3Index = cwQuery.getIndexQuery('ChildNodeIndex')
+
 const tlmdQuery = dbQuery.init(dbConfigs.telemundo)
 const titleIndex = tlmdQuery.getIndexQuery('SeriesTypeTitle')
 const statusIndex = tlmdQuery.getIndexQuery('SeriesTypeStatus')
@@ -65,7 +67,7 @@ function hitDB(cmd = 'Q') {
         const pk=util.arg(2)
         // let sk=util.arg(3); if (!sk) sk = pk
         const shortView = util.arg(3)
-        const cols = 'datePublished, itemType, title, slug'
+        const cols = '#uuid, datePublished, itemType, title, slug'
         queryTelemundoTable(pk, pk, shortView?cols:null)
       }
       else if (cmd==='Q1') {
@@ -73,11 +75,25 @@ function hitDB(cmd = 'Q') {
         const sk=util.arg(3)
         // queryTelemundoIndex(setIndexParams(pk, sk))
         // queryTelemundoIndex(childIndex.eq(pk, sk))
-        queryTelemundoIndex(gsi1Index.eq(pk, sk, 'datePublished, itemType, title'))
+        console.log('*** Find parent records ***');
+        let qparams = gsi1Index.eq(pk, sk, '#uuid, isParent, datePublished, itemType, title')
+        // qparams.FilterExpression = 'isParent = false'
+        queryTelemundoIndex(qparams)
       }
+      else if (cmd==='Q3') {
+        const pk=util.arg(2)
+        const sk=util.arg(3)
+        console.log('*** Find child records ***');
+        queryTelemundoIndex(gsi3Index.eq(util.arg(2), null, '#uuid, programUuid, isParent, datePublished, itemType, title, slug'))
+      }
+
       else if (cmd==='QS') {
         // queryTelemundoIndex(statusIndex.beginsWith(util.arg(2), util.arg(3)))
+        console.log('*** Find content types under a record ***');
         queryTelemundoIndex(gsi2Index.beginsWith(util.arg(2), util.arg(3), 'datePublished, itemType, title, slug'))
+
+        // console.log('*** Find records containing a record ***');
+        // queryTelemundoIndex(gsi3Index.eq(util.arg(2), null, 'datePublished, itemType, title, slug'))
       }
       else if (cmd==='QSF') {
         let qparams = statusIndex.beginsWith(util.arg(2), util.arg(3))
@@ -127,8 +143,8 @@ function loadCWTable(datafile) {
   let parentRecord = {}
   const newitem = doTransform(p7content)
   if (newitem.isParent) parentRecord = null
-  else {
-    delete newitem.isParent
+  else { // Create a parent record
+    // delete newitem.isParent
     Object.assign(parentRecord, newitem)
   }
   docClient.put({
@@ -140,6 +156,7 @@ function loadCWTable(datafile) {
   })
   if (parentRecord) {
     parentRecord.programUuid = parentRecord.uuid
+    parentRecord.isParent = true
     docClient.put({ TableName: tablename, Item: parentRecord }, function(err, data) {
       if (err) console.error('Unable to add record. Error JSON:', util.obj2str(err));
       else console.log('Putitem succeeded for single record');
@@ -225,7 +242,7 @@ function queryTelemundoTable(pkvalue, skvalue, projection) {
   if (!pkvalue) { console.log('Please provide PK value'); return; }
   const sortKeyDisplay = (skvalue || 'No sort key value provided')
   if (!mainTable) return
-  let params = { TableName: mainTable, Key: { 'uuid': pkvalue }}
+  let params = { TableName: mainTable, Key: { 'uuid': pkvalue }, ExpressionAttributeNames: {'#uuid': 'uuid'}}
   if (skvalue) { params.Key.programUuid = skvalue }
   if (projection) params.ProjectionExpression = projection
   const docClient = new AWS.DynamoDB.DocumentClient();
