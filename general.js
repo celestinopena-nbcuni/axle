@@ -41,7 +41,13 @@ function propstr(sourceObj, propList) {
   }, []).join(', ')
 }
 
-function convertUnixDate(unixdate) { return new Date(unixdate * 1000).toLocaleString() }
+function convertUnixDate(unixdate, format = 'ISO', factor = 1) {
+  let dt = null;
+  if (format.toUpperCase()==='LOCALE') dt = new Date(unixdate * factor).toLocaleString()
+  else if (format.toUpperCase()==='DATE') dt = new Date(unixdate * factor).toDateString()
+  else dt = new Date(unixdate * factor).toISOString()
+  return dt
+}
 
 function isNonBlank(item) {
   if (Array.isArray(item)) return item.length>0

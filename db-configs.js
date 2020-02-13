@@ -1,34 +1,45 @@
 module.exports = {
-  'telemundo1': {
-    TableName: 'TelemundoContent',
+  'telemundoCW': {
+    TableName: 'TelemundoCW',
     AttributeDefinitions: [
-      { AttributeName: 'nid', AttributeType: 'S' },
-      { AttributeName: 'child', AttributeType: 'S' },
-      { AttributeName: 'ctype', AttributeType: 'S' }
+      { AttributeName: 'uuid', AttributeType: 'S' },
+      { AttributeName: 'itemType', AttributeType: 'S' },
+      { AttributeName: 'statusDate', AttributeType: 'S' },
+      { AttributeName: 'title', AttributeType: 'S' },
+      { AttributeName: 'slug', AttributeType: 'S' }
     ],
     KeySchema: [
-      { AttributeName: 'nid', KeyType: 'HASH'},
-      { AttributeName: 'child', KeyType: 'RANGE'}
+      { AttributeName: 'uuid', KeyType: 'HASH'}
     ],
     ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 },
     GlobalSecondaryIndexes: [{
-      IndexName: 'GSI-1',
+      IndexName: 'ItemtypeTitle',
       KeySchema: [
-        { AttributeName: 'child', KeyType: 'HASH' },
-        { AttributeName: 'nid', KeyType: 'RANGE' }
+        { AttributeName: 'itemType', KeyType: 'HASH' },
+        { AttributeName: 'title', KeyType: 'RANGE' }
       ],
       Projection: { ProjectionType: 'ALL' },
-      ProvisionedThroughput: {
-        ReadCapacityUnits: 10,
-        WriteCapacityUnits: 10
-      }
+      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
     },
     {
-      IndexName: 'GSI-2',
-      KeySchema: [{ AttributeName: 'child', KeyType: 'HASH' }],
+      IndexName: 'ItemtypeSlug',
+      KeySchema: [
+        { AttributeName: 'itemType', KeyType: 'HASH' },
+        { AttributeName: 'slug', KeyType: 'RANGE' }
+      ],
       Projection: { ProjectionType: 'ALL' },
-      ProvisionedThroughput: { ReadCapacityUnits: '10', WriteCapacityUnits: '10' }
-    }]
+      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
+    },
+    {
+      IndexName: 'StatusDate',
+      KeySchema: [
+        { AttributeName: 'itemType', KeyType: 'HASH' },
+        { AttributeName: 'statusDate', KeyType: 'RANGE' }
+      ],
+      Projection: { ProjectionType: 'ALL' },
+      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
+    }
+  ]
   },
   'telemundo': {
     TableName: 'TelemundoContent',
@@ -67,56 +78,6 @@ module.exports = {
       KeySchema: [
         { AttributeName: 'section', KeyType: 'HASH' },
         { AttributeName: 'seriesCtypeStatus', KeyType: 'RANGE' }
-      ],
-      Projection: { ProjectionType: 'ALL' },
-      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
-    }
-  ]
-  },
-  'telemundoCW': {
-    TableName: 'TelemundoCW',
-    AttributeDefinitions: [
-      { AttributeName: 'uuid', AttributeType: 'S' },
-      { AttributeName: 'programUuid', AttributeType: 'S' },
-      { AttributeName: 'itemType', AttributeType: 'S' },
-      { AttributeName: 'datePublished', AttributeType: 'S' }
-    ],
-    KeySchema: [
-      { AttributeName: 'uuid', KeyType: 'HASH'},
-      { AttributeName: 'programUuid', KeyType: 'RANGE'}
-    ],
-    ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 },
-    GlobalSecondaryIndexes: [{
-      IndexName: 'ParentNode',
-      KeySchema: [
-        { AttributeName: 'programUuid', KeyType: 'HASH' },
-        { AttributeName: 'uuid', KeyType: 'RANGE' }
-      ],
-      Projection: { ProjectionType: 'ALL' },
-      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
-    },
-    {
-      IndexName: 'ItemTypeParentIndex',
-      KeySchema: [
-        { AttributeName: 'itemType', KeyType: 'HASH' },
-        { AttributeName: 'programUuid', KeyType: 'RANGE' }
-      ],
-      Projection: { ProjectionType: 'ALL' },
-      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
-    },
-    {
-      IndexName: 'ChildNodeIndex',
-      KeySchema: [
-        { AttributeName: 'uuid', KeyType: 'HASH' }
-      ],
-      Projection: { ProjectionType: 'ALL' },
-      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
-    },
-    {
-      IndexName: 'ItemTypeIndex',
-      KeySchema: [
-        { AttributeName: 'itemType', KeyType: 'HASH' },
-        { AttributeName: 'datePublished', KeyType: 'RANGE' }
       ],
       Projection: { ProjectionType: 'ALL' },
       ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }

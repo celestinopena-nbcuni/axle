@@ -49,9 +49,7 @@ function init(dbConfig) {
       let params = {
         TableName: dbConfig.TableName,
         IndexName: indexName,
-        ExpressionAttributeNames: {
-          '#uuid': 'uuid'
-        }
+        ExpressionAttributeNames: {}
       }
       params.ExpressionAttributeNames[pkPlaceholder] = pk
       if (skvalue) {
@@ -69,7 +67,7 @@ function init(dbConfig) {
       let params = {
         TableName: dbConfig.TableName,
         IndexName: indexName,
-        ExpressionAttributeNames: {'#uuid': 'uuid'}
+        ExpressionAttributeNames: {}
       }
       params.ExpressionAttributeNames[pkPlaceholder] = pk
       if (skvalue) {
@@ -87,7 +85,7 @@ function init(dbConfig) {
       let params = {
         TableName: dbConfig.TableName,
         IndexName: indexName,
-        ExpressionAttributeNames: {'#uuid': 'uuid'}
+        ExpressionAttributeNames: {}
       }
       params.ExpressionAttributeNames[pkPlaceholder] = pk
       if (skvalue) {
