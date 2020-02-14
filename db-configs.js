@@ -5,27 +5,16 @@ module.exports = {
       { AttributeName: 'uuid', AttributeType: 'S' },
       { AttributeName: 'itemType', AttributeType: 'S' },
       { AttributeName: 'statusDate', AttributeType: 'S' },
-      { AttributeName: 'title', AttributeType: 'S' },
-      { AttributeName: 'slug', AttributeType: 'S' }
+      { AttributeName: 'statusCreateDateSubtype', AttributeType: 'S' }
     ],
     KeySchema: [
       { AttributeName: 'uuid', KeyType: 'HASH'}
     ],
     ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 },
     GlobalSecondaryIndexes: [{
-      IndexName: 'ItemtypeTitle',
+      IndexName: 'Itemtype',
       KeySchema: [
-        { AttributeName: 'itemType', KeyType: 'HASH' },
-        { AttributeName: 'title', KeyType: 'RANGE' }
-      ],
-      Projection: { ProjectionType: 'ALL' },
-      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
-    },
-    {
-      IndexName: 'ItemtypeSlug',
-      KeySchema: [
-        { AttributeName: 'itemType', KeyType: 'HASH' },
-        { AttributeName: 'slug', KeyType: 'RANGE' }
+        { AttributeName: 'itemType', KeyType: 'HASH' }
       ],
       Projection: { ProjectionType: 'ALL' },
       ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
@@ -35,6 +24,15 @@ module.exports = {
       KeySchema: [
         { AttributeName: 'itemType', KeyType: 'HASH' },
         { AttributeName: 'statusDate', KeyType: 'RANGE' }
+      ],
+      Projection: { ProjectionType: 'ALL' },
+      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
+    },
+    {
+      IndexName: 'StatusCreateDateSubtype',
+      KeySchema: [
+        { AttributeName: 'itemType', KeyType: 'HASH' },
+        { AttributeName: 'statusCreateDateSubtype', KeyType: 'RANGE' }
       ],
       Projection: { ProjectionType: 'ALL' },
       ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }

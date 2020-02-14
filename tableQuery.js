@@ -101,6 +101,21 @@ function init(dbConfig) {
     function toString() {
       return `Index ${indexName} containing key ${pk}, ${sk}`
     }
+    // Provide a plain language description of the query parameter object
+    function explain() {
+      const kce = Object.keys(config.ExpressionAttributeNames).reduce((orig, curr) => {
+        return orig.replace(curr, config.ExpressionAttributeNames[curr])
+      }, config.KeyConditionExpression)
+      let criteria = Object.keys(config.ExpressionAttributeValues).reduce((orig, curr) => { return orig.replace(curr, `'${config.ExpressionAttributeValues[curr]}'`) }, kce)
+      let description = `Search ${config.TableName}.${config.IndexName} WHERE ${criteria}`
+      if (config.FilterExpression) {
+        const filter = Object.keys(config.ExpressionAttributeNames).reduce((orig, curr) => { return orig.replace(curr, `'${config.ExpressionAttributeNames[curr]}'`) }, config.FilterExpression)
+        criteria = Object.keys(config.ExpressionAttributeValues).reduce((orig, curr) => { return orig.replace(curr, `'${config.ExpressionAttributeValues[curr]}'`) }, filter)
+        description += ` FILTER ON ${criteria}`
+      }
+      if (config.ProjectionExpression) description += ` SHOWING ONLY ${config.ProjectionExpression}`
+      return description
+    }
     return {
       eq: eq,
       beginsWith: beginsWith,
@@ -111,7 +126,8 @@ function init(dbConfig) {
       $filter: filterChain,
       $project: projectChain,
       getParams: getParams,
-      toString: toString
+      toString: toString,
+      explain: explain
     }
   } // getIndexQuery
   return { getIndexQuery: getIndexQuery }

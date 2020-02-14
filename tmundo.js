@@ -8,8 +8,7 @@ const cjp=require('./data/utils.js')
 
 const mainTable = 'TelemundoCW'
 const cwQuery = dbQuery.init(dbConfigs.telemundoCW)
-const typeTitleIndex = cwQuery.getIndexQuery('ItemtypeTitle')
-const typeSlugIndex = cwQuery.getIndexQuery('ItemtypeSlug')
+const typeIndex = cwQuery.getIndexQuery('Itemtype')
 const typeStatusDateIndex = cwQuery.getIndexQuery('StatusDate')
 const cmdlineParams = util.arg(1).toUpperCase()
 if (!cmdlineParams) {
@@ -67,16 +66,18 @@ function hitDB(cmd = 'Q') {
       }
       else if (cmd==='Q1') {
         const pk=util.arg(2)
-        const sk=util.arg(3)
+        const shortView=util.arg(3)
         console.log('*** Find in TITLE by ITEMTYPE ***');
-        const projex = '#uuid, datePublished, itemType, title'
-        queryTelemundoIndex(typeTitleIndex.beginsWith(pk, sk))
+        const cols = 'datePublished, itemType, title, slug, statusDate'
+        queryTelemundoIndex(typeIndex.beginsWith(pk, null, shortView?cols:null))
       }
       else if (cmd==='Q2') {
         const pk=util.arg(2)
-        const sk=util.arg(3)
+        const filterOn=util.arg(3)
+        const idx = typeIndex.$eq(pk).$filter('contains(#slug, :slug)', 'slug', filterOn)
         console.log('*** Find in SLUG by ITEMTYPE ***');
-        queryTelemundoIndex(typeSlugIndex.contains(pk, sk, '#uuid, datePublished, itemType, title, slug'))
+        console.log(idx.explain());
+        queryTelemundoIndex(idx.getParams())
       }
       else if (cmd==='Q3') {
         console.log('*** Find in STATUS or DATE by ITEMTYPE ***');
@@ -96,9 +97,11 @@ function hitDB(cmd = 'Q') {
       else if (cmd==='X') {
         const pk=util.arg(2)
         const sk=util.arg(3)
-        let qparams = typeTitleIndex.$eq(pk, null).$project('title, datePublished, itemType, slug, frontends').$filter('contains(#frontends, :frontends)', 'frontends', util.arg(3)).getParams()
-        console.log('Our index param obj:', qparams);
-        queryTelemundoIndex(qparams)
+        let qparams = typeTitleIndex.$eq(pk, null).$project('title, datePublished, itemType, slug, frontends').$filter('contains(#frontends, :frontends)', 'frontends', util.arg(3))
+
+        // console.log('Our index param obj:', qparams);
+        // queryTelemundoIndex(qparams.getParams())
+        console.log('Query translated:', qparams.getParams(), qparams.explain());
       }
       else {
         console.log('Unrecognized option:', cmd);
@@ -149,6 +152,7 @@ function loadCWTable(datafile) {
     if (err) console.error('Unable to add record. Error JSON:', util.obj2str(err));
     else console.log('Putitem succeeded for single record');
   })
+  /*
   if (parentRecord) {
     parentRecord.programUuid = parentRecord.uuid
     parentRecord.isParent = true
@@ -157,6 +161,7 @@ function loadCWTable(datafile) {
       else console.log('Putitem succeeded for single record');
     })
   }
+  */
 }
 
 function loadTable(datafile, tablename) {
@@ -217,21 +222,26 @@ function readTelemundoDatafile(datafile) {
   } else {
     console.log(`Read import object in ${datafile}`, Object.keys(p7content))
     const newRecord = doTransform(p7content)
-    console.log('Transformed data',newRecord );
+    console.log('Transformed data', newRecord);
+    // const pName=util.arg(3) console.log('Search for', pName, cjp.findprop(newRecord.data, pName));
   }
 }
 
 function doTransform(record) {
   const mainFields = util.copyFields(record, ['data', 'itemType', 'uuid', 'slug', 'title', 'media', 'categories', 'tags', 'published', 'relatedSeries', 'currentSeason', 'datePublished', 'references', 'frontends'])
+  mainFields.subtype = _.has(record, 'customFields.bundle') ? record.customFields.bundle : _.has(record, 'customFields.metatags.og:type') ? record.customFields.metatags['og:type'] : 'UNKNOWN'
+  if (_.has(record, 'customFields.mpxAdditionalMetadata.mpxCreated')) mainFields.createDT = util.convertUnixDate(record.customFields.mpxAdditionalMetadata.mpxCreated)
+  if (_.has(record, 'customFields.mpxAdditionalMetadata.mpxUpdated')) mainFields.updateDT = util.convertUnixDate(record.customFields.mpxAdditionalMetadata.mpxUpdated)
+
   if (!mainFields.data) {
     console.log('No data attrib present, now adding...')
     mainFields.data = util.copyFields(record, ['title', 'short_description', 'long_description', 'promoDescription', 'promoTitle', 'seriesType', 'promoKicker', 'genre', 'links', 'customFields'])
   }
   mainFields.programUuid = (record.program && record.program.programUuid) ? record.program.programUuid  : record.uuid
-  mainFields.isParent = (mainFields.programUuid == mainFields.uuid)
   if (mainFields.datePublished) mainFields.datePublished = util.convertUnixDate(mainFields.datePublished)
   // Create composite fields for indexes
   mainFields.statusDate = `${(mainFields.published ? '1' : '0')}#${mainFields.datePublished}`.toUpperCase()
+  mainFields.statusCreateDateSubtype = `${(mainFields.published ? '1' : '0')}#${mainFields.createDT}#${mainFields.subtype}`.toUpperCase()
   return util.noblanks(mainFields)
 }
 
