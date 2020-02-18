@@ -65,12 +65,13 @@ function hitDB(cmd = 'Q') {
         queryTelemundoTable(pk, null, shortView?cols:null)
       }
       else if (cmd==='Q1') {
-        const pk='fad8df82-55eb-4452-89e5-c546874a7212' // util.arg(2)
-        const sk=util.arg(2)
-        const shortView=util.arg(3)
+        const pk=util.arg(2) // 'fad8df82-55eb-4452-89e5-c546874a7212'
+        const sk=util.arg(3)
+        const shortView=util.arg(4)
         console.log('*** Find by uuid, itemType ***');
-        let idx = typeIndex.$eq(pk, sk).$project('programUuid, itemType, title, statusDate, slug')
+        let idx = typeIndex.$eq(pk, sk).$project('#uuid, programUuid, itemType, title, statusDate, slug').$addAttribute('uuid')
         // if (shortView) idx.$project('uuid, itemType, title, statusDate, slug')
+        console.log(idx.explain());
         queryTelemundoIndex(idx.getParams())
       }
       else if (cmd==='Q2') {

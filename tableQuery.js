@@ -40,6 +40,10 @@ function init(dbConfig) {
       config = contains(pkvalue, skvalue)
       return this
     }
+    function addAttributeNameChain(name, value) {
+      addAttributeName(name, value)
+      return this
+    }
     function addAttributeName(name, value) {
       const key = '#' + name
       config.ExpressionAttributeNames[key] = name
@@ -135,6 +139,7 @@ function init(dbConfig) {
       $contains: containsChain,
       $filter: filterChain,
       $project: projectChain,
+      $addAttribute: addAttributeNameChain,
       getParams: getParams,
       toString: toString,
       explain: explain
