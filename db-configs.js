@@ -3,36 +3,30 @@ module.exports = {
     TableName: 'TelemundoCW',
     AttributeDefinitions: [
       { AttributeName: 'uuid', AttributeType: 'S' },
+      { AttributeName: 'programUuid', AttributeType: 'S' },
       { AttributeName: 'itemType', AttributeType: 'S' },
-      { AttributeName: 'statusDate', AttributeType: 'S' },
-      { AttributeName: 'statusCreateDateSubtype', AttributeType: 'S' }
+      { AttributeName: 'statusDate', AttributeType: 'S' }
     ],
     KeySchema: [
-      { AttributeName: 'uuid', KeyType: 'HASH'}
+      { AttributeName: 'uuid', KeyType: 'HASH'},
+      { AttributeName: 'programUuid', KeyType: 'RANGE' }
     ],
     ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 },
+    LocalSecondaryIndexes: [
+      {
+        IndexName: 'Itemtype',
+        KeySchema: [
+          { AttributeName: 'uuid', KeyType: 'HASH' },
+          { AttributeName: 'itemType', KeyType: 'RANGE' }
+        ],
+        Projection: { ProjectionType: 'ALL' }
+      }
+    ],
     GlobalSecondaryIndexes: [{
-      IndexName: 'Itemtype',
-      KeySchema: [
-        { AttributeName: 'itemType', KeyType: 'HASH' }
-      ],
-      Projection: { ProjectionType: 'ALL' },
-      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
-    },
-    {
       IndexName: 'StatusDate',
       KeySchema: [
         { AttributeName: 'itemType', KeyType: 'HASH' },
         { AttributeName: 'statusDate', KeyType: 'RANGE' }
-      ],
-      Projection: { ProjectionType: 'ALL' },
-      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
-    },
-    {
-      IndexName: 'StatusCreateDateSubtype',
-      KeySchema: [
-        { AttributeName: 'itemType', KeyType: 'HASH' },
-        { AttributeName: 'statusCreateDateSubtype', KeyType: 'RANGE' }
       ],
       Projection: { ProjectionType: 'ALL' },
       ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }

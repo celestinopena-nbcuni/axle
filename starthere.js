@@ -47,20 +47,17 @@ function hitDB(cmd = 'Q') {
         const datafile = arg(2)
         if (datafile) readTelemundoDatafile(datafile, (arg(3) ? false : true))
       } else if (cmd==='Q') {
-        // queryTable('Movies', { Key: { 'year': 2004, 'title': 'Alfie' } })
         let params = {
           TableName: 'Films',
-          Key: {
-            'actor': arg(2),
-            'film': arg(3)
-          }
+          Key: { 'actor': arg(2) }
         }
+        const sk=util.arg(3)
+        if (sk) params.Key.film = sk
         queryTable(params)
-        // queryIndex('Films', arg(2), arg(4))
       } else if (cmd==='QL') {
         const pk=util.arg(2)
-        const sk=util.arg(3)
-        const idx = localIndex.$eq(pk)
+        const sk=Number(util.arg(3))
+        const idx = localIndex.$eq(pk, sk)
         console.log(idx.explain());
         queryIndex(idx.getParams())
       } else {

@@ -8,8 +8,8 @@ const cjp=require('./data/utils.js')
 
 const mainTable = 'TelemundoCW'
 const cwQuery = dbQuery.init(dbConfigs.telemundoCW)
-const typeIndex = cwQuery.getIndexQuery('Itemtype')
-const typeStatusDateIndex = cwQuery.getIndexQuery('StatusDate')
+const typeIndex = cwQuery.getLocalIndexQuery('Itemtype')
+const typeStatusDateIndex = cwQuery.getGlobalIndexQuery('StatusDate')
 const cmdlineParams = util.arg(1).toUpperCase()
 if (!cmdlineParams) {
   console.log('usage: node tmundo.js options');
@@ -65,11 +65,13 @@ function hitDB(cmd = 'Q') {
         queryTelemundoTable(pk, null, shortView?cols:null)
       }
       else if (cmd==='Q1') {
-        const pk=util.arg(2)
+        const pk='fad8df82-55eb-4452-89e5-c546874a7212' // util.arg(2)
+        const sk=util.arg(2)
         const shortView=util.arg(3)
-        console.log('*** Find in TITLE by ITEMTYPE ***');
-        const cols = 'datePublished, itemType, title, slug, statusDate'
-        queryTelemundoIndex(typeIndex.beginsWith(pk, null, shortView?cols:null))
+        console.log('*** Find by uuid, itemType ***');
+        let idx = typeIndex.$eq(pk, sk).$project('programUuid, itemType, title, statusDate, slug')
+        // if (shortView) idx.$project('uuid, itemType, title, statusDate, slug')
+        queryTelemundoIndex(idx.getParams())
       }
       else if (cmd==='Q2') {
         const pk=util.arg(2)
@@ -136,32 +138,27 @@ function loadCWTable(datafile) {
     console.log('Problem reading', datafile)
     return
   }
-  const docClient = new AWS.DynamoDB.DocumentClient();
-  const tablename = 'TelemundoCW'
-  let parentRecord = {}
   const newitem = doTransform(p7content)
-  if (newitem.isParent) parentRecord = null
-  else { // Create a parent record
-    // delete newitem.isParent
-    Object.assign(parentRecord, newitem)
-  }
-  docClient.put({
-    TableName: tablename,
-    Item: newitem
-  }, function(err, data) {
-    if (err) console.error('Unable to add record. Error JSON:', util.obj2str(err));
-    else console.log('Putitem succeeded for single record');
-  })
-  /*
-  if (parentRecord) {
-    parentRecord.programUuid = parentRecord.uuid
-    parentRecord.isParent = true
-    docClient.put({ TableName: tablename, Item: parentRecord }, function(err, data) {
-      if (err) console.error('Unable to add record. Error JSON:', util.obj2str(err));
-      else console.log('Putitem succeeded for single record');
+  insertRecord(mainTable, newitem).then(function(data) {
+    console.log('Putitem succeeded for single record.');
+    const relatedObjects = (newitem.itemType==='series') ? expandSeriesRelations(newitem) : expandRelations(newitem)
+    relatedObjects.forEach(item => {
+      insertRecord(mainTable, item).then(function(data) {
+        console.log('Add related item OK');
+      }, function(error) {
+        console.log('Error adding related objecgt', error);
+      })
     })
-  }
-  */
+  }, function(error) {
+    console.error('Unable to add record. Error JSON:', util.obj2str(error));
+  })
+}
+
+function insertRecord(tablename, record) {
+  return new Promise((resolve, reject) => {
+    const docClient = new AWS.DynamoDB.DocumentClient();
+    docClient.put({ TableName: tablename, Item: record }, function(err, data) { if (err) reject(err); resolve(data) })
+  })
 }
 
 function loadTable(datafile, tablename) {
@@ -220,10 +217,15 @@ function readTelemundoDatafile(datafile) {
       console.log('Record', index, util.obj2str(record));
     })
   } else {
-    console.log(`Read import object in ${datafile}`, Object.keys(p7content))
+    console.log(`Read import object in ${datafile}`); // , Object.keys(p7content))
     const newRecord = doTransform(p7content)
-    console.log('Transformed data', newRecord);
-    // const pName=util.arg(3) console.log('Search for', pName, cjp.findprop(newRecord.data, pName));
+    if (newRecord.itemType==='series') expandSeriesRelations(newRecord)
+    else expandRelations(newRecord)
+    /* else if (newRecord.itemType==='video') expandRelations(newRecord)
+    else if (newRecord.itemType==='mediaGallery') console.log('A media gallery');
+    else if (newRecord.itemType==='post') console.log('A post');
+    else console.log('Unexpected item type', newRecord.itemType);
+    */
   }
 }
 
@@ -243,6 +245,49 @@ function doTransform(record) {
   mainFields.statusDate = `${(mainFields.published ? '1' : '0')}#${mainFields.datePublished}`.toUpperCase()
   mainFields.statusCreateDateSubtype = `${(mainFields.published ? '1' : '0')}#${mainFields.createDT}#${mainFields.subtype}`.toUpperCase()
   return util.noblanks(mainFields)
+}
+
+function expandSeriesRelations(record) {
+  let ctr = 0
+  const relatedCategories = record.categories.reduce((orig, curr) => {
+    ctr++
+    orig.push({
+      uuid: record.uuid,
+      programUuid: curr,
+      itemType: 'taxonomy',
+      title: `A taxonomy created from ${record.uuid}, a ${record.itemType}`,
+      data: { id: ctr }
+    })
+    return orig
+  }, [])
+  const relatedRefs = record.references.reduce((orig, curr) => {
+    ctr++
+    orig.push({
+      uuid: record.uuid,
+      programUuid: curr.uuid,
+      itemType: curr.itemType,
+      title: `Reference created from ${record.uuid}, a ${record.itemType}`,
+      data: { id: ctr }
+    })
+    return orig
+  }, [])
+  return relatedCategories.concat(relatedRefs)
+}
+
+function expandRelations(record) {
+  let ctr = 0
+  const relatedTags = record.tags.reduce((orig, curr) => {
+    ctr++
+    orig.push({
+      uuid: record.uuid,
+      programUuid: curr,
+      itemType: 'taxonomy',
+      title: `A taxonomy created from ${record.uuid}, a ${record.itemType}`,
+      data: { id: ctr }
+    })
+    return orig
+  }, [])
+  return relatedTags
 }
 
 function queryTelemundoTable(pkvalue, skvalue, projection) {
