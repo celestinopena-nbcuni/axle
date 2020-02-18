@@ -3,7 +3,12 @@ const AWS = require('aws-sdk'),
   fs = require('fs'),
   YAML = require('yaml'),
   _ = require('lodash'),
-  dbConfigs = require('./db-configs')
+  dbConfigs = require('./db-configs'),
+  dbQuery = require('./tableQuery'),
+  util = require('./general')
+
+const filmQuery = dbQuery.init(dbConfigs.films)
+const localIndex = filmQuery.getLocalIndexQuery('LOC-1')
 
 const cmdlineParams = arg(1)
 if (!cmdlineParams) {
@@ -14,6 +19,7 @@ if (!cmdlineParams) {
   console.log('  L filename = load the given json file into the database');
   console.log('  R filename = read the given json file');
   console.log('  Q pk sk = query table by PK and SK');
+  console.log('  QL pk sk = query local index by PK and SK');
 } else {
   // showCredentials()
   hitDB(cmdlineParams)
@@ -42,14 +48,21 @@ function hitDB(cmd = 'Q') {
         if (datafile) readTelemundoDatafile(datafile, (arg(3) ? false : true))
       } else if (cmd==='Q') {
         // queryTable('Movies', { Key: { 'year': 2004, 'title': 'Alfie' } })
-        queryTable('Films', { Key: { 'actor': arg(2), 'film': arg(3) } })
-        queryIndex('Films', arg(2), arg(4))
-        /*0
-        const pk=arg(2)
-        const sk=arg(3)
-        queryTelemundoTable(pk, sk)
-        queryTelemundoIndex(sk, pk)
-        */
+        let params = {
+          TableName: 'Films',
+          Key: {
+            'actor': arg(2),
+            'film': arg(3)
+          }
+        }
+        queryTable(params)
+        // queryIndex('Films', arg(2), arg(4))
+      } else if (cmd==='QL') {
+        const pk=util.arg(2)
+        const sk=util.arg(3)
+        const idx = localIndex.$eq(pk)
+        console.log(idx.explain());
+        queryIndex(idx.getParams())
       } else {
         console.log('Unrecognized option:', cmd);
       }
@@ -98,14 +111,10 @@ function loadTable(datafile, tablename) {
   }
 }
 
-function queryTable(tablename, options) {
+function queryTable(qparams) {
   const docClient = new AWS.DynamoDB.DocumentClient()
   // Initialize parameters needed to call DynamoDB
-  let params = {
-    TableName: tablename
-  }
-  Object.keys(options).forEach(key => params[key] = options[key])
-  docClient.get(params, function(err, data) {
+  docClient.get(qparams, function(err, data) {
     if (err) {
       console.error('Unable to read item. Error JSON:', JSON.stringify(err, null, 2));
     } else {
@@ -114,40 +123,31 @@ function queryTable(tablename, options) {
   })
 }
 
-function queryIndex(tablename, pkvalue, skvalue) {
+function queryIndex1(tablename, pkvalue, skvalue) {
   if (!pkvalue) { console.log('Please provide PK value'); return; }
-  const params = {
-    TableName: tablename,
-    IndexName: 'LOC-1',
-    KeyConditionExpression: 'actor = :a and #year = :y',
-    ExpressionAttributeNames: {
-      '#year': 'year'
-    },
-    ExpressionAttributeValues: {
-      ':a': {S: pkvalue},
-      ':y' : {N: skvalue}
-    },
-    ProjectionExpression: 'actor, #year, film'
-  }
   const params2 = {
     TableName: tablename,
     IndexName: 'LOC-1',
     KeyConditionExpression: 'actor = :a and #year = :y',
-    ExpressionAttributeNames: {
-      '#year': 'year'
-    },
-    ExpressionAttributeValues: {
-      ':a': pkvalue,
-      ':y' : Number(skvalue)
-    }
+    ExpressionAttributeNames: { '#year': 'year' },
+    ExpressionAttributeValues: { ':a': pkvalue, ':y' : Number(skvalue) }
   }
   const docClient = new AWS.DynamoDB.DocumentClient();
-  // const docClient = new AWS.DynamoDB();
   docClient.query(params2, function (err, data) {
     console.log('Query secondary index by:', pkvalue, skvalue);
     if (err) console.log('Error getting item by PK+SK', pkvalue, skvalue, obj2str(err));
     else if (data.Items) console.log('Got item by PK', pkvalue, skvalue, data.Items);
     else console.log('NO item by PK', pkvalue, skvalue, params, data);
+  })
+}
+
+function queryIndex(queryParams) {
+  const docClient = new AWS.DynamoDB.DocumentClient();
+  docClient.query(queryParams, function (err, data) {
+    console.log('Query index by:', queryParams);
+    if (err) console.log('Error getting item by key', util.obj2str(err));
+    else if (data.Items) console.log('Got item by key', data.Items);
+    else console.log('NO item found by this index');
   })
 }
 
