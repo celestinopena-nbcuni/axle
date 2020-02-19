@@ -10,7 +10,7 @@ const AWS = require('aws-sdk'),
 const filmQuery = dbQuery.init(dbConfigs.films)
 const localIndex = filmQuery.getLocalIndexQuery('LOC-1')
 
-const cmdlineParams = arg(1)
+const cmdlineParams = util.arg(1).toUpperCase()
 if (!cmdlineParams) {
   console.log('usage: node starthere.js options');
   console.log(' Options');
@@ -47,13 +47,16 @@ function hitDB(cmd = 'Q') {
         const datafile = arg(2)
         if (datafile) readTelemundoDatafile(datafile, (arg(3) ? false : true))
       } else if (cmd==='Q') {
-        let params = {
-          TableName: 'Films',
-          Key: { 'actor': arg(2) }
-        }
+        const pk=util.arg(2)
         const sk=util.arg(3)
-        if (sk) params.Key.film = sk
-        queryTable(params)
+        // let params = { TableName: 'Films', Key: { 'actor': pk }}; if (sk) params.Key.film = sk;
+        let qparams = {
+          TableName: 'Films',
+          KeyConditionExpression: sk ? '#pk = :pk AND #sk = :sk' : '#pk = :pk',
+          ExpressionAttributeNames: sk ? {'#pk': 'actor', '#sk': 'film'} : {'#pk': 'actor'},
+          ExpressionAttributeValues: sk ? {':pk': pk, ':sk': sk} : {':pk': pk}
+        }
+        queryTable(qparams)
       } else if (cmd==='QL') {
         const pk=util.arg(2)
         const sk=Number(util.arg(3))
@@ -111,7 +114,8 @@ function loadTable(datafile, tablename) {
 function queryTable(qparams) {
   const docClient = new AWS.DynamoDB.DocumentClient()
   // Initialize parameters needed to call DynamoDB
-  docClient.get(qparams, function(err, data) {
+  // docClient.get(qparams, function(err, data) {
+  docClient.query(qparams, function(err, data) {
     if (err) {
       console.error('Unable to read item. Error JSON:', JSON.stringify(err, null, 2));
     } else {

@@ -10,6 +10,8 @@ const mainTable = 'TelemundoCW'
 const cwQuery = dbQuery.init(dbConfigs.telemundoCW)
 const typeIndex = cwQuery.getLocalIndexQuery('Itemtype')
 const typeStatusDateIndex = cwQuery.getGlobalIndexQuery('StatusDate')
+const gsi2Index = cwQuery.getGlobalIndexQuery('GSI2')
+// const gsi3Index = cwQuery.getGlobalIndexQuery('GSI3')
 const cmdlineParams = util.arg(1).toUpperCase()
 if (!cmdlineParams) {
   console.log('usage: node tmundo.js options');
@@ -17,6 +19,7 @@ if (!cmdlineParams) {
   console.log('  C tablename = create table');
   console.log('  D tablename = delete table');
   console.log('  Demo = run demo scenario');
+  console.log('  I = list indexes on this table');
   console.log('  L filename tablename = load the given json file into a table');
   console.log('  R filename = read the given json file');
   console.log('  Q pk sk = query table by PK and SK');
@@ -57,12 +60,18 @@ function hitDB(cmd = 'Q') {
         if (datafile) readTelemundoDatafile(datafile)
       }
       else if (cmd==='DEMO') { runDemo(util.arg(2) || 'taxonomy') }
+      else if (cmd==='I') {
+        console.log(typeIndex.toString())
+        console.log(gsi2Index.toString())
+        // console.log(gsi3Index.toString())
+        console.log(typeStatusDateIndex.toString())
+      }
       else if (cmd==='Q') {
         const pk=util.arg(2)
-        // let sk=util.arg(3); if (!sk) sk = pk
-        const shortView = util.arg(3)
-        const cols = '#uuid, datePublished, itemType, title, slug'
-        queryTelemundoTable(pk, null, shortView?cols:null)
+        const sk=util.arg(3)
+        const shortView = util.arg(4)
+        const cols = '#pk, datePublished, itemType, title, slug'
+        queryTelemundoTable(pk, sk, shortView?cols:null)
       }
       else if (cmd==='Q1') {
         const pk=util.arg(2) // 'fad8df82-55eb-4452-89e5-c546874a7212'
@@ -76,17 +85,19 @@ function hitDB(cmd = 'Q') {
       }
       else if (cmd==='Q2') {
         const pk=util.arg(2)
-        const filterOn=util.arg(3)
-        const idx = typeIndex.$eq(pk).$filter('contains(#slug, :slug)', 'slug', filterOn)
-        console.log('*** Find in SLUG by ITEMTYPE ***');
+        const sk=util.arg(3)
+        const idx = gsi2Index.$beginsWith(pk)
         console.log(idx.explain());
         queryTelemundoIndex(idx.getParams())
       }
       else if (cmd==='Q3') {
-        console.log('*** Find in STATUS or DATE by ITEMTYPE ***');
-        let idx = typeStatusDateIndex.$beginsWith(util.arg(2), util.arg(3))
-        if (util.arg(4)) idx.$project('statusDate, itemType, title, slug')
-        queryTelemundoIndex(idx.getParams())
+        let gsi = gsi3Index.$beginsWith(util.arg(2), util.arg(3))
+        queryTelemundoIndex(gsi.getParams())
+
+        // let idx = typeStatusDateIndex.$beginsWith(util.arg(2), util.arg(3))
+        // console.log(idx.explain());
+        // if (util.arg(3)) idx.$project('statusDate, itemType, title, slug')
+        // queryTelemundoIndex(idx.getParams())
       }
       else if (cmd==='QSF') {
         /*
@@ -113,18 +124,6 @@ function hitDB(cmd = 'Q') {
   })
 }
 
-function runDemo(searchTerm) {
-  const tlmdQuery = dbQuery.init(dbConfigs.telemundo)
-  const gsi = tlmdQuery.getIndexQuery('ChildNode')
-  if (gsi) {
-    getQueryIndex(gsi.eq('none')).then(function(data) {
-      console.log(`Query returned ${data.Items.length} with content type ${searchTerm}`, data.Items.find(item => item.ctype==searchTerm));
-    }, function(error) {
-      console.log('Query failed:', util.obj2str(error));
-    })
-  }
-}
-
 function createTable(params, tablename) {
   const dynamodb = new AWS.DynamoDB();
   dynamodb.createTable(params, function(err, data) {
@@ -144,6 +143,7 @@ function loadCWTable(datafile) {
     console.log('Putitem succeeded for single record.');
     const relatedObjects = (newitem.itemType==='series') ? expandSeriesRelations(newitem) : expandRelations(newitem)
     relatedObjects.forEach(item => {
+      item.sourcefile = datafile
       insertRecord(mainTable, item).then(function(data) {
         console.log('Add related item OK');
       }, function(error) {
@@ -222,52 +222,60 @@ function readTelemundoDatafile(datafile) {
     const newRecord = doTransform(p7content)
     if (newRecord.itemType==='series') expandSeriesRelations(newRecord)
     else expandRelations(newRecord)
-    /* else if (newRecord.itemType==='video') expandRelations(newRecord)
-    else if (newRecord.itemType==='mediaGallery') console.log('A media gallery');
-    else if (newRecord.itemType==='post') console.log('A post');
-    else console.log('Unexpected item type', newRecord.itemType);
-    */
   }
 }
 
 function doTransform(record) {
   const mainFields = util.copyFields(record, ['data', 'itemType', 'uuid', 'slug', 'title', 'media', 'categories', 'tags', 'published', 'relatedSeries', 'currentSeason', 'datePublished', 'references', 'frontends'])
-  mainFields.subtype = _.has(record, 'customFields.bundle') ? record.customFields.bundle : _.has(record, 'customFields.metatags.og:type') ? record.customFields.metatags['og:type'] : 'UNKNOWN'
+  // mainFields.subtype = _.has(record, 'customFields.bundle') ? record.customFields.bundle : _.has(record, 'customFields.metatags.og:type') ? record.customFields.metatags['og:type'] : 'UNKNOWN'
   if (_.has(record, 'customFields.mpxAdditionalMetadata.mpxCreated')) mainFields.createDT = util.convertUnixDate(record.customFields.mpxAdditionalMetadata.mpxCreated)
   if (_.has(record, 'customFields.mpxAdditionalMetadata.mpxUpdated')) mainFields.updateDT = util.convertUnixDate(record.customFields.mpxAdditionalMetadata.mpxUpdated)
 
   if (!mainFields.data) {
-    console.log('No data attrib present, now adding...')
     mainFields.data = util.copyFields(record, ['title', 'short_description', 'long_description', 'promoDescription', 'promoTitle', 'seriesType', 'promoKicker', 'genre', 'links', 'customFields'])
   }
   mainFields.programUuid = (record.program && record.program.programUuid) ? record.program.programUuid  : record.uuid
   if (mainFields.datePublished) mainFields.datePublished = util.convertUnixDate(mainFields.datePublished)
   // Create composite fields for indexes
   mainFields.statusDate = `${(mainFields.published ? '1' : '0')}#${mainFields.datePublished}`.toUpperCase()
-  mainFields.statusCreateDateSubtype = `${(mainFields.published ? '1' : '0')}#${mainFields.createDT}#${mainFields.subtype}`.toUpperCase()
+  mainFields.publishDateItemtypeTitle = `${mainFields.datePublished}#${mainFields.itemType}#${mainFields.title}`.toUpperCase()
   return util.noblanks(mainFields)
+}
+
+function abbrevUuid(id) {
+  const parts=id.split('-');
+  const last=parts.length-1;
+  return '...' + parts[last].substr(-6)
 }
 
 function expandSeriesRelations(record) {
   let ctr = 0
+  const categoryTitle = `A category created from ${abbrevUuid(record.uuid)}, a ${record.itemType}`
+  const refTitle =  `Reference created from ${abbrevUuid(record.uuid)}, a ${record.itemType}`
   const relatedCategories = record.categories.reduce((orig, curr) => {
     ctr++
+    console.log('id '+record.uuid+' contains', curr);
     orig.push({
       uuid: record.uuid,
       programUuid: curr,
       itemType: 'taxonomy',
-      title: `A taxonomy created from ${record.uuid}, a ${record.itemType}`,
+      title: categoryTitle,
+      datePublished: '2019-12-11',
+      publishDateItemtypeTitle: '2019-12-11#taxonomy#'+categoryTitle,
       data: { id: ctr }
     })
     return orig
   }, [])
   const relatedRefs = record.references.reduce((orig, curr) => {
     ctr++
+    console.log('id '+record.uuid+' contains', curr.uuid);
     orig.push({
       uuid: record.uuid,
       programUuid: curr.uuid,
       itemType: curr.itemType,
-      title: `Reference created from ${record.uuid}, a ${record.itemType}`,
+      title: refTitle,
+      datePublished: '2019-12-0'+ctr,
+      publishDateItemtypeTitle: `2019-12-0${ctr}#${curr.itemType}#${refTitle}`,
       data: { id: ctr }
     })
     return orig
@@ -277,13 +285,17 @@ function expandSeriesRelations(record) {
 
 function expandRelations(record) {
   let ctr = 0
+  const tagTitle = `A tag created from ${abbrevUuid(record.uuid)}, a ${record.itemType}`
   const relatedTags = record.tags.reduce((orig, curr) => {
     ctr++
+    console.log('id '+record.uuid+' contains', curr);
     orig.push({
       uuid: record.uuid,
       programUuid: curr,
       itemType: 'taxonomy',
-      title: `A taxonomy created from ${record.uuid}, a ${record.itemType}`,
+      title: tagTitle,
+      datePublished: '2019-11-0'+ctr,
+      publishDateItemtypeTitle: `2019-11-0${ctr}#taxonomy#${tagTitle}`,
       data: { id: ctr }
     })
     return orig
@@ -295,14 +307,21 @@ function queryTelemundoTable(pkvalue, skvalue, projection) {
   if (!pkvalue) { console.log('Please provide PK value'); return; }
   const sortKeyDisplay = (skvalue || 'No sort key value provided')
   if (!mainTable) return
-  let params = { TableName: mainTable, Key: { 'uuid': pkvalue }, ExpressionAttributeNames: {'#uuid': 'uuid'}}
-  if (skvalue) { params.Key.programUuid = skvalue }
+  const pk = cwQuery.getTablePK()
+  const sk = cwQuery.getTableSK()
+  let params = {
+    TableName: mainTable,
+    // KeyConditionExpression: skvalue ? '#pk = :pk AND #sk = :sk' : '#pk = :pk',
+    KeyConditionExpression: skvalue ? '#pk = :pk AND begins_with(#sk, :sk)' : '#pk = :pk',
+    ExpressionAttributeNames: skvalue ? {'#pk': pk, '#sk': sk} : {'#pk': pk},
+    ExpressionAttributeValues: skvalue ? {':pk': pkvalue, ':sk': skvalue} : {':pk': pkvalue}
+  }
   if (projection) params.ProjectionExpression = projection
+  console.log('Query table:', params);
   const docClient = new AWS.DynamoDB.DocumentClient();
-  docClient.get(params, function (err, data) {
-    console.log('Query main table by:', pkvalue, sortKeyDisplay);
+  docClient.query(params, function (err, data) {
     if (err) console.log('Error getting item by key', pkvalue, sortKeyDisplay, util.obj2str(err));
-    else if (data.Item) console.log('Got item by PK', pkvalue, sortKeyDisplay, data.Item);
+    else if (data.Items) console.log('Objects found:', data.Items.length);
     else console.log('NO item by PK', pkvalue, sortKeyDisplay);
   })
 }
@@ -385,36 +404,14 @@ function transformP7(record, index) {
   return p7item
 }
 
-function setIndexParams(pkvalue, skvalue) {
-  let params = {
-    TableName: 'TelemundoContent',
-    IndexName: 'ChildNode'
+function runDemo(searchTerm) {
+  const tlmdQuery = dbQuery.init(dbConfigs.telemundo)
+  const gsi = tlmdQuery.getIndexQuery('ChildNode')
+  if (gsi) {
+    getQueryIndex(gsi.eq('none')).then(function(data) {
+      console.log(`Query returned ${data.Items.length} with content type ${searchTerm}`, data.Items.find(item => item.ctype==searchTerm));
+    }, function(error) {
+      console.log('Query failed:', util.obj2str(error));
+    })
   }
-  if (skvalue) {
-    params.KeyConditionExpression = '#child = :c and #nid = :n'
-    params.ExpressionAttributeNames = { '#child': 'child', '#nid': 'nid' }
-    params.ExpressionAttributeValues = { ':c': pkvalue, ':n': skvalue }
-  } else {
-    params.KeyConditionExpression = '#child = :c'
-    params.ExpressionAttributeNames = { '#child': 'child' }
-    params.ExpressionAttributeValues = { ':c': pkvalue }
-  }
-  return params
-}
-
-function setIndex2Params(pkvalue, skvalue) {
-  let params = {
-    TableName: 'TelemundoContent',
-    IndexName: 'SeriesTypeTitle'
-  }
-  if (skvalue) {
-    params.KeyConditionExpression = '#section = :pk AND begins_with(seriesCtypeTitle, :sk)'
-    params.ExpressionAttributeNames = { '#section': 'section' }
-    params.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
-  } else {
-    params.KeyConditionExpression = '#section = :pk'
-    params.ExpressionAttributeNames = { '#section': 'section' }
-    params.ExpressionAttributeValues = { ':pk': pkvalue }
-  }
-  return params
 }

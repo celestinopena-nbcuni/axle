@@ -1,5 +1,13 @@
 /* This library provides an object which facilitates the generation of query parameter objects. */
 function init(dbConfig) {
+  function getTablePK() {
+    const key = dbConfig.KeySchema.find(item => item.KeyType=='HASH')
+    return key ? key.AttributeName : null
+  }
+  function getTableSK() {
+    const key = dbConfig.KeySchema.find(item => item.KeyType=='RANGE')
+    return key ? key.AttributeName : null
+  }
   function getLocalIndexQuery(indexName) {
     if (!dbConfig.LocalSecondaryIndexes) return null
     const locIdx = dbConfig.LocalSecondaryIndexes.find(item => item.IndexName===indexName)
@@ -28,22 +36,6 @@ function init(dbConfig) {
       ExpressionAttributeNames: {}
     }
     function getParams() { return config }
-    function eqChain(pkvalue, skvalue) {
-      config = eq(pkvalue, skvalue)
-      return this
-    }
-    function beginsWithChain(pkvalue, skvalue) {
-      config = beginsWith(pkvalue, skvalue)
-      return this
-    }
-    function containsChain(pkvalue, skvalue) {
-      config = contains(pkvalue, skvalue)
-      return this
-    }
-    function addAttributeNameChain(name, value) {
-      addAttributeName(name, value)
-      return this
-    }
     function addAttributeName(name, value) {
       const key = '#' + name
       config.ExpressionAttributeNames[key] = name
@@ -51,15 +43,6 @@ function init(dbConfig) {
         const valueKey = ':' + name
         config.ExpressionAttributeValues[valueKey] = value
       }
-    }
-    function filterChain(expr, name, value) {
-      config.FilterExpression = expr // '#status = :stat'
-      addAttributeName(name, value)
-      return this
-    }
-    function projectChain(projection) {
-      if (projection) config.ProjectionExpression = projection
-      return this
     }
     function eq(pkvalue, skvalue) {
       let params = {
@@ -81,7 +64,7 @@ function init(dbConfig) {
     function beginsWith(pkvalue, skvalue) {
       let params = {
         TableName: dbConfig.TableName,
-        IndexName: indexName,
+        IndexName: index.IndexName,
         ExpressionAttributeNames: {}
       }
       params.ExpressionAttributeNames[pkPlaceholder] = pk
@@ -98,7 +81,7 @@ function init(dbConfig) {
     function contains(pkvalue, skvalue) {
       let params = {
         TableName: dbConfig.TableName,
-        IndexName: indexName,
+        IndexName: index.IndexName,
         ExpressionAttributeNames: {}
       }
       params.ExpressionAttributeNames[pkPlaceholder] = pk
@@ -112,8 +95,33 @@ function init(dbConfig) {
       }
       return params
     }
+    function eqChain(pkvalue, skvalue) {
+      config = eq(pkvalue, skvalue)
+      return this
+    }
+    function beginsWithChain(pkvalue, skvalue) {
+      config = beginsWith(pkvalue, skvalue)
+      return this
+    }
+    function containsChain(pkvalue, skvalue) {
+      config = contains(pkvalue, skvalue)
+      return this
+    }
+    function addAttributeNameChain(name, value) {
+      addAttributeName(name, value)
+      return this
+    }
+    function filterChain(expr, name, value) {
+      config.FilterExpression = expr // '#status = :stat'
+      addAttributeName(name, value)
+      return this
+    }
+    function projectChain(projection) {
+      if (projection) config.ProjectionExpression = projection
+      return this
+    }
     function toString() {
-      return `Index ${indexName} containing key ${pk}, ${sk}`
+      return `Index ${index.IndexName} contains key ${pk}, ${sk}`
     }
     // Provide a plain language description of the query parameter object
     function explain() {
@@ -147,7 +155,9 @@ function init(dbConfig) {
   }
   return {
     getLocalIndexQuery: getLocalIndexQuery,
-    getGlobalIndexQuery: getGlobalIndexQuery
+    getGlobalIndexQuery: getGlobalIndexQuery,
+    getTablePK: getTablePK,
+    getTableSK: getTableSK
   }
 } // init
 module.exports = { init: init }

@@ -4,12 +4,13 @@ module.exports = {
     AttributeDefinitions: [
       { AttributeName: 'uuid', AttributeType: 'S' },
       { AttributeName: 'programUuid', AttributeType: 'S' },
+      { AttributeName: 'publishDateItemtypeTitle', AttributeType: 'S' },
       { AttributeName: 'itemType', AttributeType: 'S' },
       { AttributeName: 'statusDate', AttributeType: 'S' }
     ],
     KeySchema: [
       { AttributeName: 'uuid', KeyType: 'HASH'},
-      { AttributeName: 'programUuid', KeyType: 'RANGE' }
+      { AttributeName: 'publishDateItemtypeTitle', KeyType: 'RANGE' }
     ],
     ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 },
     LocalSecondaryIndexes: [
@@ -27,6 +28,15 @@ module.exports = {
       KeySchema: [
         { AttributeName: 'itemType', KeyType: 'HASH' },
         { AttributeName: 'statusDate', KeyType: 'RANGE' }
+      ],
+      Projection: { ProjectionType: 'ALL' },
+      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
+    },
+    {
+      IndexName: 'GSI2',
+      KeySchema: [
+        { AttributeName: 'programUuid', KeyType: 'HASH' },
+        { AttributeName: 'uuid', KeyType: 'RANGE' }
       ],
       Projection: { ProjectionType: 'ALL' },
       ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
