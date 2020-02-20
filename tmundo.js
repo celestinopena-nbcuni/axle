@@ -140,12 +140,12 @@ function loadCWTable(datafile) {
   }
   const newitem = doTransform(p7content)
   insertRecord(mainTable, newitem).then(function(data) {
-    console.log('Putitem succeeded for single record.');
+    console.log('Putitem succeeded for single record', newitem.uuid);
     const relatedObjects = (newitem.itemType==='series') ? expandSeriesRelations(newitem) : expandRelations(newitem)
     relatedObjects.forEach(item => {
       item.sourcefile = datafile
       insertRecord(mainTable, item).then(function(data) {
-        console.log('Add related item OK');
+        console.log('  Add related item', item.programUuid);
       }, function(error) {
         console.log('Error adding related objecgt', error);
       })
@@ -188,6 +188,7 @@ function loadTable(datafile, tablename) {
   }
 }
 
+// Like loadTable() but transform incoming data
 function loadTransformTable(datafile) {
   const p7content = util.readObject(datafile)
   if (!p7content) {
@@ -207,6 +208,7 @@ function loadTransformTable(datafile) {
   })
 }
 
+// Read data only, without actually importing
 function readTelemundoDatafile(datafile) {
   const p7content = util.readObject(datafile)
   if (!p7content) {
@@ -223,84 +225,6 @@ function readTelemundoDatafile(datafile) {
     if (newRecord.itemType==='series') expandSeriesRelations(newRecord)
     else expandRelations(newRecord)
   }
-}
-
-function doTransform(record) {
-  const mainFields = util.copyFields(record, ['data', 'itemType', 'uuid', 'slug', 'title', 'media', 'categories', 'tags', 'published', 'relatedSeries', 'currentSeason', 'datePublished', 'references', 'frontends'])
-  // mainFields.subtype = _.has(record, 'customFields.bundle') ? record.customFields.bundle : _.has(record, 'customFields.metatags.og:type') ? record.customFields.metatags['og:type'] : 'UNKNOWN'
-  if (_.has(record, 'customFields.mpxAdditionalMetadata.mpxCreated')) mainFields.createDT = util.convertUnixDate(record.customFields.mpxAdditionalMetadata.mpxCreated)
-  if (_.has(record, 'customFields.mpxAdditionalMetadata.mpxUpdated')) mainFields.updateDT = util.convertUnixDate(record.customFields.mpxAdditionalMetadata.mpxUpdated)
-
-  if (!mainFields.data) {
-    mainFields.data = util.copyFields(record, ['title', 'short_description', 'long_description', 'promoDescription', 'promoTitle', 'seriesType', 'promoKicker', 'genre', 'links', 'customFields'])
-  }
-  mainFields.programUuid = (record.program && record.program.programUuid) ? record.program.programUuid  : record.uuid
-  if (mainFields.datePublished) mainFields.datePublished = util.convertUnixDate(mainFields.datePublished)
-  // Create composite fields for indexes
-  mainFields.statusDate = `${(mainFields.published ? '1' : '0')}#${mainFields.datePublished}`.toUpperCase()
-  mainFields.publishDateItemtypeTitle = `${mainFields.datePublished}#${mainFields.itemType}#${mainFields.title}`.toUpperCase()
-  return util.noblanks(mainFields)
-}
-
-function abbrevUuid(id) {
-  const parts=id.split('-');
-  const last=parts.length-1;
-  return '...' + parts[last].substr(-6)
-}
-
-function expandSeriesRelations(record) {
-  let ctr = 0
-  const categoryTitle = `A category created from ${abbrevUuid(record.uuid)}, a ${record.itemType}`
-  const refTitle =  `Reference created from ${abbrevUuid(record.uuid)}, a ${record.itemType}`
-  const relatedCategories = record.categories.reduce((orig, curr) => {
-    ctr++
-    console.log('id '+record.uuid+' contains', curr);
-    orig.push({
-      uuid: record.uuid,
-      programUuid: curr,
-      itemType: 'taxonomy',
-      title: categoryTitle,
-      datePublished: '2019-12-11',
-      publishDateItemtypeTitle: '2019-12-11#taxonomy#'+categoryTitle,
-      data: { id: ctr }
-    })
-    return orig
-  }, [])
-  const relatedRefs = record.references.reduce((orig, curr) => {
-    ctr++
-    console.log('id '+record.uuid+' contains', curr.uuid);
-    orig.push({
-      uuid: record.uuid,
-      programUuid: curr.uuid,
-      itemType: curr.itemType,
-      title: refTitle,
-      datePublished: '2019-12-0'+ctr,
-      publishDateItemtypeTitle: `2019-12-0${ctr}#${curr.itemType}#${refTitle}`,
-      data: { id: ctr }
-    })
-    return orig
-  }, [])
-  return relatedCategories.concat(relatedRefs)
-}
-
-function expandRelations(record) {
-  let ctr = 0
-  const tagTitle = `A tag created from ${abbrevUuid(record.uuid)}, a ${record.itemType}`
-  const relatedTags = record.tags.reduce((orig, curr) => {
-    ctr++
-    console.log('id '+record.uuid+' contains', curr);
-    orig.push({
-      uuid: record.uuid,
-      programUuid: curr,
-      itemType: 'taxonomy',
-      title: tagTitle,
-      datePublished: '2019-11-0'+ctr,
-      publishDateItemtypeTitle: `2019-11-0${ctr}#taxonomy#${tagTitle}`,
-      data: { id: ctr }
-    })
-    return orig
-  }, [])
-  return relatedTags
 }
 
 function queryTelemundoTable(pkvalue, skvalue, projection) {
@@ -353,6 +277,87 @@ function deleteTable(tablename) {
       console.log('Deleted table.');
     }
   })
+}
+
+// Provide an abbreviation for a uuid
+function abbrevUuid(id) {
+  const parts=id.split('-');
+  const last=parts.length-1;
+  return '...' + parts[last].substr(-6)
+}
+
+// Generate new records from a given (series) record
+function expandSeriesRelations(record) {
+  let ctr = 0
+  const categoryTitle = `A category created from ${abbrevUuid(record.uuid)}, a ${record.itemType}`
+  const refTitle =  `Reference created from ${abbrevUuid(record.uuid)}, a ${record.itemType}`
+  const relatedCategories = record.categories.reduce((orig, curr) => {
+    ctr++
+    // console.log('id '+record.uuid+' contains', curr);
+    orig.push({
+      uuid: record.uuid,
+      programUuid: curr,
+      itemType: 'taxonomy',
+      title: categoryTitle,
+      datePublished: '2019-12-11',
+      publishDateItemtypeTitle: '2019-12-11#taxonomy#'+categoryTitle,
+      data: { id: ctr }
+    })
+    return orig
+  }, [])
+  const relatedRefs = record.references.reduce((orig, curr) => {
+    ctr++
+    // console.log('id '+record.uuid+' contains', curr.uuid);
+    orig.push({
+      uuid: record.uuid,
+      programUuid: curr.uuid,
+      itemType: curr.itemType,
+      title: refTitle,
+      datePublished: '2019-12-0'+ctr,
+      publishDateItemtypeTitle: `2019-12-0${ctr}#${curr.itemType}#${refTitle}`,
+      data: { id: ctr }
+    })
+    return orig
+  }, [])
+  return relatedCategories.concat(relatedRefs)
+}
+
+// Generate new records from a given record
+function expandRelations(record) {
+  let ctr = 0
+  const tagTitle = `A tag created from ${abbrevUuid(record.uuid)}, a ${record.itemType}`
+  const relatedTags = record.tags.reduce((orig, curr) => {
+    ctr++
+    // console.log('id '+record.uuid+' contains', curr);
+    orig.push({
+      uuid: record.uuid,
+      programUuid: curr,
+      itemType: 'taxonomy',
+      title: tagTitle,
+      datePublished: '2019-11-0'+ctr,
+      publishDateItemtypeTitle: `2019-11-0${ctr}#taxonomy#${tagTitle}`,
+      data: { id: ctr }
+    })
+    return orig
+  }, [])
+  return relatedTags
+}
+
+function doTransform(record) {
+  const mainFields = util.copyFields(record, ['data', 'itemType', 'uuid', 'slug', 'title', 'media', 'categories', 'tags', 'published', 'relatedSeries', 'currentSeason', 'datePublished', 'references', 'frontends'])
+  // mainFields.subtype = _.has(record, 'customFields.bundle') ? record.customFields.bundle : _.has(record, 'customFields.metatags.og:type') ? record.customFields.metatags['og:type'] : 'UNKNOWN'
+  if (_.has(record, 'customFields.mpxAdditionalMetadata.mpxCreated')) mainFields.createDT = util.convertUnixDate(record.customFields.mpxAdditionalMetadata.mpxCreated)
+  if (_.has(record, 'customFields.mpxAdditionalMetadata.mpxUpdated')) mainFields.updateDT = util.convertUnixDate(record.customFields.mpxAdditionalMetadata.mpxUpdated)
+
+  if (!mainFields.data) {
+    mainFields.data = util.copyFields(record, ['title', 'short_description', 'long_description', 'promoDescription', 'promoTitle', 'seriesType', 'promoKicker', 'genre', 'links', 'customFields'])
+  }
+  mainFields.programUuid = (record.program && record.program.programUuid) ? record.program.programUuid  : record.uuid
+  if (mainFields.datePublished) mainFields.datePublished = util.convertUnixDate(mainFields.datePublished)
+  // Create composite fields for indexes
+  mainFields.statusDate = `${(mainFields.published ? '1' : '0')}#${mainFields.datePublished}`.toUpperCase()
+  mainFields.publishDateItemtypeTitle = `${mainFields.datePublished}#${mainFields.itemType}#${mainFields.title}`.toUpperCase()
+  return util.noblanks(mainFields)
 }
 
 function transformAppend(record, index) {
