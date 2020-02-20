@@ -8,10 +8,12 @@ const cjp=require('./data/utils.js')
 
 const mainTable = 'TelemundoCW'
 const cwQuery = dbQuery.init(dbConfigs.telemundoCW)
-const typeIndex = cwQuery.getLocalIndexQuery('Itemtype')
-const typeStatusDateIndex = cwQuery.getGlobalIndexQuery('StatusDate')
-const gsi2Index = cwQuery.getGlobalIndexQuery('GSI2')
-// const gsi3Index = cwQuery.getGlobalIndexQuery('GSI3')
+const indexes = {
+  'Q1': cwQuery.getLocalIndexQuery('Itemtype'),
+  'Q2': cwQuery.getGlobalIndexQuery('GSI2'),
+  'Q3': cwQuery.getGlobalIndexQuery('StatusDate')
+}
+
 const cmdlineParams = util.arg(1).toUpperCase()
 if (!cmdlineParams) {
   console.log('usage: node tmundo.js options');
@@ -26,7 +28,6 @@ if (!cmdlineParams) {
   console.log('  Q1 pk sk = query GSI 1 index');
   console.log('  Q2 pk sk = query GSI 2 index');
   console.log('  Q3 pk sk = query GSI 3 index');
-  console.log('  QSF pk sk = query SeriesTypeStatus index using Filter (Unpublished)');
 } else {
   hitDB(cmdlineParams)
 }
@@ -59,12 +60,11 @@ function hitDB(cmd = 'Q') {
         const datafile = util.arg(2)
         if (datafile) readTelemundoDatafile(datafile)
       }
-      else if (cmd==='DEMO') { runDemo(util.arg(2) || 'taxonomy') }
+      else if (cmd==='DEMO') { runDemo(util.arg(2) || 'taxonomy', indexes.Q1) }
       else if (cmd==='I') {
-        console.log(typeIndex.toString())
-        console.log(gsi2Index.toString())
-        // console.log(gsi3Index.toString())
-        console.log(typeStatusDateIndex.toString())
+        Object.keys(indexes).forEach(key => {
+          console.log(key+' ->', indexes[key].toString());
+        })
       }
       else if (cmd==='Q') {
         const pk=util.arg(2)
@@ -77,43 +77,24 @@ function hitDB(cmd = 'Q') {
         const pk=util.arg(2) // 'fad8df82-55eb-4452-89e5-c546874a7212'
         const sk=util.arg(3)
         const shortView=util.arg(4)
-        console.log('*** Find by uuid, itemType ***');
-        let idx = typeIndex.$eq(pk, sk).$project('#uuid, programUuid, itemType, title, statusDate, slug').$addAttribute('uuid')
-        // if (shortView) idx.$project('uuid, itemType, title, statusDate, slug')
-        console.log(idx.explain());
-        queryTelemundoIndex(idx.getParams())
+        let idx = indexes.Q1.$eq(pk, sk).$project('#uuid, programUuid, itemType, title, statusDate, slug').$addAttribute('uuid')
+        // queryTelemundoIndex(idx.getParams())
+        queryIndex(idx)
       }
       else if (cmd==='Q2') {
         const pk=util.arg(2)
         const sk=util.arg(3)
-        const idx = gsi2Index.$beginsWith(pk)
-        console.log(idx.explain());
-        queryTelemundoIndex(idx.getParams())
+        queryIndex(indexes.Q2.$beginsWith(pk, sk).$project('#uuid, programUuid, itemType, title, slug').$addAttribute('uuid'))
       }
       else if (cmd==='Q3') {
-        let gsi = gsi3Index.$beginsWith(util.arg(2), util.arg(3))
-        queryTelemundoIndex(gsi.getParams())
-
-        // let idx = typeStatusDateIndex.$beginsWith(util.arg(2), util.arg(3))
-        // console.log(idx.explain());
-        // if (util.arg(3)) idx.$project('statusDate, itemType, title, slug')
-        // queryTelemundoIndex(idx.getParams())
-      }
-      else if (cmd==='QSF') {
-        /*
-        let qparams = tlmdQuery.getIndexQuery('SeriesTypeStatus').beginsWith(util.arg(2), util.arg(3))
-        qparams.FilterExpression = '#status = :stat'
-        qparams.ExpressionAttributeNames['#status'] = 'status'
-        qparams.ExpressionAttributeValues[':stat'] = util.arg(4) || '0'
-        queryTelemundoIndex(qparams)
-        */
+        const pk=util.arg(2)
+        const sk=util.arg(3)
+        queryIndex(indexes.Q3.$beginsWith(pk, sk).$project('#uuid, programUuid, itemType, title, slug').$addAttribute('uuid'))
       }
       else if (cmd==='X') {
         const pk=util.arg(2)
         const sk=util.arg(3)
-        let qparams = typeTitleIndex.$eq(pk, null).$project('title, datePublished, itemType, slug, frontends').$filter('contains(#frontends, :frontends)', 'frontends', util.arg(3))
-
-        // console.log('Our index param obj:', qparams);
+        let qparams = indexes.Q1.$eq(pk, null).$project('title, datePublished, itemType, slug, frontends').$filter('contains(#frontends, :frontends)', 'frontends', sk)
         // queryTelemundoIndex(qparams.getParams())
         console.log('Query translated:', qparams.getParams(), qparams.explain());
       }
@@ -250,6 +231,20 @@ function queryTelemundoTable(pkvalue, skvalue, projection) {
   })
 }
 
+function queryIndex(queryParams) {
+  let paramObj = null
+  if (queryParams.getParams) paramObj = queryParams.getParams()
+  else paramObj = queryParams
+  const docClient = new AWS.DynamoDB.DocumentClient();
+  docClient.query(paramObj, function (err, data) {
+    console.log(queryParams.toString(), JSON.stringify(paramObj,null,2));
+    if (queryParams.explain) console.log(queryParams.explain());
+    if (err) console.log('Error getting item by key', util.obj2str(err));
+    else if (data.Items) console.log(`Got items by key (${data.Items.length})`, data.Items);
+    else console.log('NO item found by this index');
+  })
+}
+
 function queryTelemundoIndex(queryParams) {
   const docClient = new AWS.DynamoDB.DocumentClient();
   docClient.query(queryParams, function (err, data) {
@@ -366,52 +361,8 @@ function transformAppend(record, index) {
   return record
 }
 
-function transformP7(record, index) {
-  let p7item = {}
-  if (record.uid && record.nid && record.type) {
-    p7item.PK = record.uid + '-' + record.nid // user + contentid
-    p7item.SK = record.type
-    p7item.type = record.type
-    p7item.uid = record.uid
-    p7item.uuid = record.uuid
-    p7item.nid = record.nid
-  } else {
-    console.log(`Record ${index || ''} has no uid`, record.uid, record.nid, record.type);
-    return
-  }
-  if (record.title) p7item.title = record.title
-  if (record.status) p7item.status = record.status
-  if (record.created) {
-    p7item.Create_DT = new Date(record.created * 1000).toLocaleString()
-  }
-  if (record.changed) {
-    p7item.Updated_DT = new Date(record.changed * 1000).toLocaleString()
-  }
-  if (_.has(record, 'field_publish_date.und[0]')) {
-    p7item.Published_DT = record.field_publish_date.und[0].value
-  }
-  if (_.has(record, 'field_byline.und[0]')) {
-    p7item.Byline = record.field_byline.und[0].value
-  }
-  if (_.has(record, 'field_categories.und')) {
-    p7item.Categories = record.field_categories.und.map(item => item.tid).join(',')
-  }
-  if (_.has(record, 'field_keywords.und')) {
-    p7item.Keywords = record.field_keywords.und.map(item => item.tid).join(',')
-  }
-  if (_.has(record, 'field_show_season_episode.und[0]')) {
-    p7item.Show = _.get(record, 'field_show_season_episode.und[0].show', '-')
-    p7item.Season = _.get(record, 'field_show_season_episode.und[0].season', '-')
-    p7item.Episode = _.get(record, 'field_show_season_episode.und[0].episode', '-')
-  }
-  // console.log(`Record ${index} =`, util.propstr(p7item, ['PK', 'SK']))
-  console.log(`Record ${index || ''} =`, util.obj2str(p7item)); console.log('');
-  return p7item
-}
-
-function runDemo(searchTerm) {
+function runDemo(searchTerm, gsi) {
   const tlmdQuery = dbQuery.init(dbConfigs.telemundo)
-  const gsi = tlmdQuery.getIndexQuery('ChildNode')
   if (gsi) {
     getQueryIndex(gsi.eq('none')).then(function(data) {
       console.log(`Query returned ${data.Items.length} with content type ${searchTerm}`, data.Items.find(item => item.ctype==searchTerm));
