@@ -72,9 +72,8 @@ function readPayload(payload) {
 
 function addObject(payload) {
   const objAlias = util.propstr(payload, ['uuid', 'itemType']) // display only subset of attributes
-  const itemType = payload.itemType
-  const record = (itemType==='node' ? createNode(payload) : createGenericContent(payload))
-  insertRecord(cwQuery.getTable(), record).then(function(data) {
+  // const itemType = payload.itemType; const record = (itemType==='node' ? createNode(payload) : createGenericContent(payload))
+  insertRecord(cwQuery.getTable(), setObjectKeyByItemtype(payload)).then(function(data) {
     console.log('Insert OK', objAlias);
   }, function(error) {
     console.log('Unable to insert object '+objAlias, util.obj2str(error));
@@ -82,10 +81,9 @@ function addObject(payload) {
 }
 
 function updateObject(payload) {
-  const objAlias = util.propstr(payload, ['uuid', 'itemType']) // display only subset of attributes
-  const itemType = payload.itemType
-  const record = (itemType==='node' ? createNode(payload) : createGenericContent(payload))
+  const record = setObjectKeyByItemtype(payload)
   const docClient = new AWS.DynamoDB.DocumentClient();
+  const updateParams = cwQuery.getUpdateQuery(record.pk, record.sk).setExpr('set #data.#datePublished = :dt').names(['data', 'datePublished']).exprValue('dt', record.data.datePublished).getParams()
   const uparams = {
     TableName: cwQuery.getTable(),
     Key: {
@@ -102,16 +100,15 @@ function updateObject(payload) {
     },
     ReturnValues: 'UPDATED_NEW'
   }
-  console.log('Update existing object', uparams);
-  docClient.update(uparams, function(err, data) {
+  console.log('Update existing object', updateParams);
+  docClient.update(updateParams, function(err, data) {
     if (err) console.log('Error on updatd', util.obj2str(err));
     else console.log('Update OK', data);
   })
 }
 
 function deleteObject(payload) {
-  const itemType = payload.itemType
-  const record = (itemType==='node' ? createNode(payload) : createGenericContent(payload))
+  const record = setObjectKeyByItemtype(payload)
   const docClient = new AWS.DynamoDB.DocumentClient();
   const params = {
     TableName: cwQuery.getTable(),
@@ -127,18 +124,16 @@ function deleteObject(payload) {
   })
 }
 
-function createGenericContent(payload) {
-  return {
-    'pk': payload.uuid,
-    'sk': (payload.childUuid || payload.title),
-    'data': payload
-  }
-}
-
-function createNode(payload) {
-  return {
+function setObjectKeyByItemtype(payload) {
+  if (payload.itemType==='node') return {
     'pk': payload.uuid,
     'sk': `${util.convertUnixDate(payload.datePublished)}#${payload.itemType}`,
+    'data': payload
+  }
+  // else if (itemType==='video') return { 'pk': 0 }
+  else return {
+    'pk': payload.uuid,
+    'sk': (payload.childUuid || payload.title),
     'data': payload
   }
 }

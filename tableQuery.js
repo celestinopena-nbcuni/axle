@@ -22,6 +22,43 @@ function init(dbConfig) {
     if (projection) config.ProjectionExpression = projection
     return config
   }
+  function getUpdateQuery(pkvalue, skvalue) {
+    const pk = getTablePK() || 'pk'
+    const sk = getTableSK() || 'sk'
+    let config = {
+      TableName: dbConfig.TableName,
+      Key: {},
+      ExpressionAttributeNames: {},
+      ExpressionAttributeValues: {},
+      ReturnValues: 'UPDATED_NEW'
+    }
+    config.Key[pk] = pkvalue
+    config.Key[sk] = skvalue
+    function getParams() { return config }
+    function setExpr(updateExpr) {
+      config.UpdateExpression = updateExpr
+      return this
+    }
+    function names(namelist) {
+      if (Array.isArray(namelist)) namelist.forEach(item => { config.ExpressionAttributeNames[`#${item}`] = item })
+      return this
+    }
+    function values(map) {
+      Object.keys(map).forEach(key => { config.ExpressionAttributeValues[`:${key}`] = map[key] })
+      return this
+    }
+    function exprValue(expr, value) {
+      config.ExpressionAttributeValues[`:${expr}`] = value
+      return this
+    }
+    return {
+      setExpr: setExpr,
+      names: names,
+      values: values,
+      exprValue: exprValue,
+      getParams: getParams
+    }
+  }
   function getLocalIndexQuery(indexName) {
     if (!dbConfig.LocalSecondaryIndexes) return null
     const locIdx = dbConfig.LocalSecondaryIndexes.find(item => item.IndexName===indexName)
@@ -171,6 +208,7 @@ function init(dbConfig) {
     getLocalIndexQuery: getLocalIndexQuery,
     getGlobalIndexQuery: getGlobalIndexQuery,
     getTableQuery: getTableQuery,
+    getUpdateQuery: getUpdateQuery,
     getTable: getTable
   }
 } // init
