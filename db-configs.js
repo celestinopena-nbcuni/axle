@@ -1,4 +1,38 @@
 module.exports = {
+  'tlmdCW': {
+    TableName: 'TlmdCW',
+    AttributeDefinitions: [
+      { AttributeName: 'pk', AttributeType: 'S' },
+      { AttributeName: 'sk', AttributeType: 'S' },
+      { AttributeName: 'itemType', AttributeType: 'S' },
+      { AttributeName: 'GSI1-PK', AttributeType: 'S' },
+      { AttributeName: 'GSI1-SK', AttributeType: 'S' }
+    ],
+    KeySchema: [
+      { AttributeName: 'pk', KeyType: 'HASH'},
+      { AttributeName: 'sk', KeyType: 'RANGE' }
+    ],
+    ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 },
+    LocalSecondaryIndexes: [
+      {
+        IndexName: 'Itemtype',
+        KeySchema: [
+          { AttributeName: 'pk', KeyType: 'HASH' },
+          { AttributeName: 'itemType', KeyType: 'RANGE' }
+        ],
+        Projection: { ProjectionType: 'ALL' }
+      }
+    ],
+    GlobalSecondaryIndexes: [{
+      IndexName: 'GSI1',
+      KeySchema: [
+        { AttributeName: 'GSI1-PK', KeyType: 'HASH' },
+        { AttributeName: 'GSI1-SK', KeyType: 'RANGE' }
+      ],
+      Projection: { ProjectionType: 'ALL' },
+      ProvisionedThroughput: { ReadCapacityUnits: 10, WriteCapacityUnits: 10 }
+    }]
+  },
   'telemundoCW': {
     TableName: 'TelemundoCW',
     AttributeDefinitions: [

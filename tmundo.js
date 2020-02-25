@@ -203,28 +203,18 @@ function readTelemundoDatafile(datafile) {
   } else {
     console.log(`Read import object in ${datafile}`); // , Object.keys(p7content))
     const newRecord = doTransform(p7content)
-    if (newRecord.itemType==='series') expandSeriesRelations(newRecord)
-    else expandRelations(newRecord)
+    console.log(newRecord);
+    // if (newRecord.itemType==='series') expandSeriesRelations(newRecord); else expandRelations(newRecord)
   }
 }
 
 function queryTelemundoTable(pkvalue, skvalue, projection) {
   if (!pkvalue) { console.log('Please provide PK value'); return; }
   const sortKeyDisplay = (skvalue || 'No sort key value provided')
-  if (!mainTable) return
-  const pk = cwQuery.getTablePK()
-  const sk = cwQuery.getTableSK()
-  let params = {
-    TableName: mainTable,
-    // KeyConditionExpression: skvalue ? '#pk = :pk AND #sk = :sk' : '#pk = :pk',
-    KeyConditionExpression: skvalue ? '#pk = :pk AND begins_with(#sk, :sk)' : '#pk = :pk',
-    ExpressionAttributeNames: skvalue ? {'#pk': pk, '#sk': sk} : {'#pk': pk},
-    ExpressionAttributeValues: skvalue ? {':pk': pkvalue, ':sk': skvalue} : {':pk': pkvalue}
-  }
-  if (projection) params.ProjectionExpression = projection
-  console.log('Query table:', params);
+  const qparams=cwQuery.getTableQuery(pkvalue, skvalue)
+  console.log('QUERY table:', qparams);
   const docClient = new AWS.DynamoDB.DocumentClient();
-  docClient.query(params, function (err, data) {
+  docClient.query(qparams, function (err, data) {
     if (err) console.log('Error getting item by key', pkvalue, sortKeyDisplay, util.obj2str(err));
     else if (data.Items) console.log('Objects found:', data.Items.length);
     else console.log('NO item by PK', pkvalue, sortKeyDisplay);
@@ -339,6 +329,16 @@ function expandRelations(record) {
 }
 
 function doTransform(record) {
+  const itemType = record.itemType
+  if (!itemType) return createGenericContent(record)
+  if (itemType==='series') return createSeries(record)
+  else if (itemType==='mediaGallery') return createMedia(record)
+  else if (itemType==='video') return createVideo(record)
+  else if (itemType==='post') return createArticle(record)
+  else return createGenericContent(record)
+}
+
+function createGenericContent(record) {
   const mainFields = util.copyFields(record, ['data', 'itemType', 'uuid', 'slug', 'title', 'media', 'categories', 'tags', 'published', 'relatedSeries', 'currentSeason', 'datePublished', 'references', 'frontends'])
   // mainFields.subtype = _.has(record, 'customFields.bundle') ? record.customFields.bundle : _.has(record, 'customFields.metatags.og:type') ? record.customFields.metatags['og:type'] : 'UNKNOWN'
   if (_.has(record, 'customFields.mpxAdditionalMetadata.mpxCreated')) mainFields.createDT = util.convertUnixDate(record.customFields.mpxAdditionalMetadata.mpxCreated)
@@ -355,6 +355,37 @@ function doTransform(record) {
   return util.noblanks(mainFields)
 }
 
+function createSeries(record) {
+  const mainFields = util.copyFields(record, ['data', 'itemType', 'slug', 'title', 'media', 'categories', 'tags', 'published', 'relatedSeries', 'currentSeason', 'datePublished', 'references', 'frontends'])
+  mainFields.PK = record.uuid
+  if (!mainFields.data) {
+    mainFields.data = util.copyFields(record, ['title', 'short_description', 'long_description', 'promoDescription', 'promoTitle', 'seriesType', 'promoKicker', 'genre', 'links', 'customFields'])
+  }
+  mainFields.SK = (record.program && record.program.programUuid) ? record.program.programUuid  : record.uuid
+  if (mainFields.datePublished) mainFields.datePublished = util.convertUnixDate(mainFields.datePublished)
+  mainFields.publishDateItemtypeTitle = `${mainFields.datePublished}#${mainFields.itemType}#${mainFields.title}`.toUpperCase()
+  return util.noblanks(mainFields)
+}
+
+function createMedia(record) {
+  return {}
+}
+
+function createVideo(record) {
+  return {}
+}
+
+function createArticle(record) {
+  return {}
+}
+
+function createPK(pkvalue, skvalue) {
+  return {
+    'pk': pkvalue,
+    'sk': skvalue
+  }
+}
+
 function transformAppend(record, index) {
   record.seriesCtypeTitle = `${record.series}#${record.ctype}#${record.title}`.toUpperCase()
   record.seriesCtypeStatus = `${record.series}#${record.ctype}#${record.status}`.toUpperCase()
@@ -362,7 +393,6 @@ function transformAppend(record, index) {
 }
 
 function runDemo(searchTerm, gsi) {
-  const tlmdQuery = dbQuery.init(dbConfigs.telemundo)
   if (gsi) {
     getQueryIndex(gsi.eq('none')).then(function(data) {
       console.log(`Query returned ${data.Items.length} with content type ${searchTerm}`, data.Items.find(item => item.ctype==searchTerm));

@@ -1,5 +1,6 @@
 /* This library provides an object which facilitates the generation of query parameter objects. */
 function init(dbConfig) {
+  function getTable() { return dbConfig.TableName; }
   function getTablePK() {
     const key = dbConfig.KeySchema.find(item => item.KeyType=='HASH')
     return key ? key.AttributeName : null
@@ -7,6 +8,19 @@ function init(dbConfig) {
   function getTableSK() {
     const key = dbConfig.KeySchema.find(item => item.KeyType=='RANGE')
     return key ? key.AttributeName : null
+  }
+  function getTableQuery(pkvalue, skvalue, projection) {
+    const pk = getTablePK() || 'pk'
+    const sk = getTableSK() || 'sk'
+    let config = {
+      TableName: dbConfig.TableName,
+      // KeyConditionExpression: skvalue ? '#pk = :pk AND #sk = :sk' : '#pk = :pk',
+      KeyConditionExpression: skvalue ? '#pk = :pk AND begins_with(#sk, :sk)' : '#pk = :pk',
+      ExpressionAttributeNames: skvalue ? {'#pk': pk, '#sk': sk} : {'#pk': pk},
+      ExpressionAttributeValues: skvalue ? {':pk': pkvalue, ':sk': skvalue} : {':pk': pkvalue}
+    }
+    if (projection) config.ProjectionExpression = projection
+    return config
   }
   function getLocalIndexQuery(indexName) {
     if (!dbConfig.LocalSecondaryIndexes) return null
@@ -156,8 +170,8 @@ function init(dbConfig) {
   return {
     getLocalIndexQuery: getLocalIndexQuery,
     getGlobalIndexQuery: getGlobalIndexQuery,
-    getTablePK: getTablePK,
-    getTableSK: getTableSK
+    getTableQuery: getTableQuery,
+    getTable: getTable
   }
 } // init
 module.exports = { init: init }
