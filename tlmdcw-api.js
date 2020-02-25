@@ -82,7 +82,30 @@ function addObject(payload) {
 }
 
 function updateObject(payload) {
-  console.log('Update existing object');
+  const objAlias = util.propstr(payload, ['uuid', 'itemType']) // display only subset of attributes
+  const itemType = payload.itemType
+  const record = (itemType==='node' ? createNode(payload) : createGenericContent(payload))
+  const docClient = new AWS.DynamoDB.DocumentClient();
+  const uparams = {
+    TableName: cwQuery.getTable(),
+    Key: {
+      'pk': record.pk,
+      'sk': record.sk
+    },
+    UpdateExpression: 'set #data.#datePub = :dt',
+    ExpressionAttributeNames: {
+      '#data': 'data',
+      '#datePub': 'datePublished'
+    },
+    ExpressionAttributeValues: {
+      ':dt': record.data.datePublished // '1355544475000'
+    }
+  }
+  console.log('Update existing object', uparams);
+  docClient.update(uparams, function(err, data) {
+    if (err) console.log('Error on updatd', util.obj2str(err));
+    else console.log('Update OK', data);
+  })
 }
 
 function deleteObject(payload) {
