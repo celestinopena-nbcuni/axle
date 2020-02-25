@@ -78,6 +78,13 @@ function noblanks(obj) {
   return obj;
 }
 
+// Extract a specified number of rightmost digits from a uuid
+function abbrevId(id, len = 6) {
+  const parts=id.split('-');
+  const last=parts.length-1;
+  return parts[last].substr(-1*len)
+}
+
 module.exports = {
   readFile: readFile,
   readConfig: readConfig,
@@ -87,5 +94,6 @@ module.exports = {
   propstr: propstr,
   convertUnixDate: convertUnixDate,
   copyFields: copyFields,
-  noblanks: noblanks
+  noblanks: noblanks,
+  abbrevId: abbrevId
 }

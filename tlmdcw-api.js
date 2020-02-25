@@ -98,8 +98,9 @@ function updateObject(payload) {
       '#datePub': 'datePublished'
     },
     ExpressionAttributeValues: {
-      ':dt': record.data.datePublished // '1355544475000'
-    }
+      ':dt': record.data.datePublished
+    },
+    ReturnValues: 'UPDATED_NEW'
   }
   console.log('Update existing object', uparams);
   docClient.update(uparams, function(err, data) {
@@ -109,13 +110,27 @@ function updateObject(payload) {
 }
 
 function deleteObject(payload) {
-  console.log('Delete object');
+  const itemType = payload.itemType
+  const record = (itemType==='node' ? createNode(payload) : createGenericContent(payload))
+  const docClient = new AWS.DynamoDB.DocumentClient();
+  const params = {
+    TableName: cwQuery.getTable(),
+    Key: {
+      'pk': record.pk,
+      'sk': record.sk
+    }
+  }
+  console.log('Delete object', params);
+  docClient.delete(params, function(err, data) {
+    if (err) console.log('Error on updatd', util.obj2str(err));
+    else console.log('Delete OK', data);
+  })
 }
 
 function createGenericContent(payload) {
   return {
     'pk': payload.uuid,
-    'sk': payload.title,
+    'sk': (payload.childUuid || payload.title),
     'data': payload
   }
 }
@@ -123,7 +138,7 @@ function createGenericContent(payload) {
 function createNode(payload) {
   return {
     'pk': payload.uuid,
-    'sk': `${payload.uuid}#${payload.itemType}`,
+    'sk': `${util.convertUnixDate(payload.datePublished)}#${payload.itemType}`,
     'data': payload
   }
 }
