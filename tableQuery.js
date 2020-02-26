@@ -22,6 +22,38 @@ function init(dbConfig) {
     if (projection) config.ProjectionExpression = projection
     return config
   }
+  // A convenience function for getInsertParams
+  function insertParams(record) { return getInsertParams(record).get() }
+  function getInsertParams(record) {
+    let config = {
+      TableName: dbConfig.TableName,
+      Item: record
+    }
+    function get() { return config }
+    function setCondition(expr) {
+      config.ConditionExpression = expr
+      return this
+    }
+    function names(namelist) {
+      if (Array.isArray(namelist)) {
+        config.ExpressionAttributeNames = {}
+        namelist.forEach(item => { config.ExpressionAttributeNames[`#${item}`] = item })
+      }
+      return this
+    }
+    function setName(attrib, alias) {
+      if (!alias) alias = attrib
+      if (!config.ExpressionAttributeNames) config.ExpressionAttributeNames = {}
+      config.ExpressionAttributeNames[`#${alias}`] = attrib
+      return this
+    }
+    return {
+      setCondition: setCondition,
+      names: names,
+      setName: setName,
+      get: get
+    }
+  }
   function getUpdateQuery(pkvalue, skvalue) {
     const pk = getTablePK() || 'pk'
     const sk = getTableSK() || 'sk'
@@ -209,6 +241,8 @@ function init(dbConfig) {
     getGlobalIndexQuery: getGlobalIndexQuery,
     getTableQuery: getTableQuery,
     getUpdateQuery: getUpdateQuery,
+    getInsertParams: getInsertParams,
+    insertParams: insertParams,
     getTable: getTable
   }
 } // init

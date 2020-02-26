@@ -72,12 +72,28 @@ function readPayload(payload) {
 
 function addObject(payload) {
   const objAlias = util.propstr(payload, ['uuid', 'itemType']) // display only subset of attributes
-  // const itemType = payload.itemType; const record = (itemType==='node' ? createNode(payload) : createGenericContent(payload))
-  insertRecord(cwQuery.getTable(), setObjectKeyByItemtype(payload)).then(function(data) {
+  const record = setObjectKeyByItemtype(payload)
+  insertRecord(cwQuery.insertParams(record)).then(function(data) {
     console.log('Insert OK', objAlias);
+    addChildMetadata(record)
   }, function(error) {
     console.log('Unable to insert object '+objAlias, util.obj2str(error));
   })
+}
+
+function addChildMetadata(payload) {
+  if (payload.data.childUuid) {
+    let childMetadata = {
+      pk: payload.data.childUuid,
+      sk: payload.data.childUuid,
+      data: payload.data
+    }
+    const putParams = cwQuery.getInsertParams(childMetadata).setCondition('attribute_not_exists(#pk)').setName('pk').get()
+    console.log('Create metadata object for child id ', payload.data.childUuid, putParams);
+    insertRecord(putParams).then(function(data) { console.log('Insert OK', util.obj2str(data)); },
+      function(error) { console.log('Insert Error', util.obj2str(error)); })
+  }
+  else console.log('No child record contained in this payload', payload);
 }
 
 function updateObject(payload) {
@@ -138,9 +154,9 @@ function setObjectKeyByItemtype(payload) {
   }
 }
 
-function insertRecord(tablename, record) {
+function insertRecord(params) {
   return new Promise((resolve, reject) => {
     const docClient = new AWS.DynamoDB.DocumentClient();
-    docClient.put({ TableName: tablename, Item: record }, function(err, data) { if (err) reject(err); resolve(data) })
+    docClient.put(params, function(err, data) { if (err) reject(err); resolve(data) })
   })
 }
