@@ -67,7 +67,27 @@ function readPayload(payload) {
   else if (action=='insert') addObject(payload)
   else if (action=='update') updateObject(payload)
   else if (action=='delete') deleteObject(payload)
+  else if (action=='x') {
+    const objects = tryit(payload)
+    console.log('Items to insert', objects);
+  }
   else console.log('Action NOT recognized', action);
+}
+
+function tryit(payload) {
+  let records2Insert = []
+  const rootLevelFields = ['itemType', 'slug']
+  if (!payload.references) return [setObjectKeyByItemtype(payload, rootLevelFields)]
+  const children = payload.references.reduce((orig, curr) => {
+    curr.action = 'insert'
+    curr.childUuid = curr.uuid // child
+    curr.uuid = payload.uuid   // parent
+    orig.push(setObjectKeyByItemtype(curr, rootLevelFields))
+    return orig
+  }, [])
+  delete payload.references
+  records2Insert.push(setObjectKeyByItemtype(payload, rootLevelFields)) // parent
+  return records2Insert.concat(children)
 }
 
 function addObject(payload) {
@@ -99,26 +119,10 @@ function addChildMetadata(payload) {
 function updateObject(payload) {
   const record = setObjectKeyByItemtype(payload)
   const docClient = new AWS.DynamoDB.DocumentClient();
-  const updateParams = cwQuery.getUpdateQuery(record.pk, record.sk).setExpr('set #data.#datePublished = :dt').names(['data', 'datePublished']).exprValue('dt', record.data.datePublished).getParams()
-  const uparams = {
-    TableName: cwQuery.getTable(),
-    Key: {
-      'pk': record.pk,
-      'sk': record.sk
-    },
-    UpdateExpression: 'set #data.#datePub = :dt',
-    ExpressionAttributeNames: {
-      '#data': 'data',
-      '#datePub': 'datePublished'
-    },
-    ExpressionAttributeValues: {
-      ':dt': record.data.datePublished
-    },
-    ReturnValues: 'UPDATED_NEW'
-  }
+  const updateParams = cwQuery.getUpdateQuery(record.pk, record.sk).setExpr('set #data.#datePublished = :dt').names(['data', 'datePublished']).exprValue('dt', record.data.datePublished).get()
   console.log('Update existing object', updateParams);
   docClient.update(updateParams, function(err, data) {
-    if (err) console.log('Error on updatd', util.obj2str(err));
+    if (err) console.log('Error on update', util.obj2str(err));
     else console.log('Update OK', data);
   })
 }
@@ -140,23 +144,36 @@ function deleteObject(payload) {
   })
 }
 
-function setObjectKeyByItemtype(payload) {
-  if (payload.itemType==='node') return {
-    'pk': payload.uuid,
-    'sk': `${util.convertUnixDate(payload.datePublished)}#${payload.itemType}`,
-    'data': payload
+function setObjectKeyByItemtype(payload, keyfields = []) {
+  let record = Object.keys(payload).reduce((orig, curr) => {
+    if (keyfields.includes(curr)) orig[curr] = payload[curr]
+    else                          orig.data[curr] = payload[curr]
+    return orig
+  }, { data: {} })
+  if (payload.itemType==='node') {
+    record.pk = payload.uuid
+    record.sk = `${util.convertUnixDate(payload.datePublished)}#${payload.itemType}`
   }
-  // else if (itemType==='video') return { 'pk': 0 }
-  else return {
-    'pk': payload.uuid,
-    'sk': (payload.childUuid || payload.title),
-    'data': payload
+  else {
+    record.pk = payload.uuid
+    record.sk = (payload.childUuid || payload.title)
   }
+  record['GSI1-PK'] = record.sk
+  record['GSI1-SK'] = record.pk
+  return record
 }
 
 function insertRecord(params) {
   return new Promise((resolve, reject) => {
     const docClient = new AWS.DynamoDB.DocumentClient();
-    docClient.put(params, function(err, data) { if (err) reject(err); resolve(data) })
+    docClient.put(params, function(err, data) { if (err) reject(err); else resolve(data) })
+  })
+}
+
+function getMetadata(pkvalue) {
+  const qparams=cwQuery.getTableQuery(pkvalue, pkvalue) // the metadata record has same value for PK and SK
+  return new Promise((resolve, reject) => {
+    const docClient = new AWS.DynamoDB.DocumentClient();
+    docClient.query(qparams, function (err, data) { if (err) reject(err); else resolve(data) })
   })
 }

@@ -78,7 +78,7 @@ function hitDB(cmd = 'Q') {
         const sk=util.arg(3)
         const shortView=util.arg(4)
         let idx = indexes.Q1.$eq(pk, sk).$project('#uuid, programUuid, itemType, title, statusDate, slug').$addAttribute('uuid')
-        // queryTelemundoIndex(idx.getParams())
+        // queryTelemundoIndex(idx.get())
         queryIndex(idx)
       }
       else if (cmd==='Q2') {
@@ -95,8 +95,8 @@ function hitDB(cmd = 'Q') {
         const pk=util.arg(2)
         const sk=util.arg(3)
         let qparams = indexes.Q1.$eq(pk, null).$project('title, datePublished, itemType, slug, frontends').$filter('contains(#frontends, :frontends)', 'frontends', sk)
-        // queryTelemundoIndex(qparams.getParams())
-        console.log('Query translated:', qparams.getParams(), qparams.explain());
+        // queryTelemundoIndex(qparams.get())
+        console.log('Query translated:', qparams.get(), qparams.explain());
       }
       else {
         console.log('Unrecognized option:', cmd);
@@ -223,7 +223,7 @@ function queryTelemundoTable(pkvalue, skvalue, projection) {
 
 function queryIndex(queryParams) {
   let paramObj = null
-  if (queryParams.getParams) paramObj = queryParams.getParams()
+  if (queryParams.get) paramObj = queryParams.get()
   else paramObj = queryParams
   const docClient = new AWS.DynamoDB.DocumentClient();
   docClient.query(paramObj, function (err, data) {

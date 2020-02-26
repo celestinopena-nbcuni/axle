@@ -66,7 +66,7 @@ function init(dbConfig) {
     }
     config.Key[pk] = pkvalue
     config.Key[sk] = skvalue
-    function getParams() { return config }
+    function get() { return config }
     function setExpr(updateExpr) {
       config.UpdateExpression = updateExpr
       return this
@@ -88,7 +88,7 @@ function init(dbConfig) {
       names: names,
       values: values,
       exprValue: exprValue,
-      getParams: getParams
+      get: get
     }
   }
   function getLocalIndexQuery(indexName) {
@@ -118,7 +118,7 @@ function init(dbConfig) {
       IndexName: index.IndexName,
       ExpressionAttributeNames: {}
     }
-    function getParams() { return config }
+    function get() { return config }
     function addAttributeName(name, value) {
       const key = '#' + name
       config.ExpressionAttributeNames[key] = name
@@ -231,7 +231,7 @@ function init(dbConfig) {
       $filter: filterChain,
       $project: projectChain,
       $addAttribute: addAttributeNameChain,
-      getParams: getParams,
+      get: get,
       toString: toString,
       explain: explain
     }
