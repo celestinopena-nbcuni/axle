@@ -2,7 +2,8 @@ const AWS = require('aws-sdk'),
   _ = require('lodash'),
   dbConfigs = require('./db-configs'),
   dbQuery = require('./tableQuery'),
-  util = require('./general')
+  util = require('./general'),
+  tfm = require('./datatransformer')
 
 const cwQuery = dbQuery.init(dbConfigs.tlmdCW)
 const indexes = {
@@ -67,53 +68,52 @@ function readPayload(payload) {
   else if (action=='insert') addObject(payload)
   else if (action=='update') updateObject(payload)
   else if (action=='delete') deleteObject(payload)
-  else if (action=='x') {
-    const objects = tryit(payload)
-    console.log('Items to insert', objects);
-  }
+  else if (action=='x')  console.log('option x', payload);
   else console.log('Action NOT recognized', action);
 }
 
-function tryit(payload) {
-  let records2Insert = []
+function addObject(payload) {
   const rootLevelFields = ['itemType', 'slug']
-  if (!payload.references) return [setObjectKeyByItemtype(payload, rootLevelFields)]
+  if (payload.references) {
+    createBatchInsert(payload, rootLevelFields)
+    payload.references.forEach(item => { addMetadata(item) }); // add metadata records for child records
+  } else {
+    const record = setObjectKeyByItemtype(payload, rootLevelFields)
+    console.log('Insert single record', record);
+    insertRecord(cwQuery.insertParams(record)).then(function(data) {
+      console.log('Insert OK');
+    }, function(error) {
+      console.log('Unable to insert object', util.obj2str(error));
+    })
+  }
+}
+
+function createBatchInsert(payload, rootLevelFields) {
+  const parent = setObjectKeyByItemtype(payload, rootLevelFields)
   const children = payload.references.reduce((orig, curr) => {
-    curr.action = 'insert'
-    curr.childUuid = curr.uuid // child
-    curr.uuid = payload.uuid   // parent
-    orig.push(setObjectKeyByItemtype(curr, rootLevelFields))
+    let item = util.copy(curr) // Object.assign({}, curr)
+    item.childUuid = curr.uuid // child
+    item.uuid = payload.uuid   // parent
+    orig.push(setObjectKeyByItemtype(item, rootLevelFields))
     return orig
   }, [])
-  delete payload.references
-  records2Insert.push(setObjectKeyByItemtype(payload, rootLevelFields)) // parent
-  return records2Insert.concat(children)
+  delete parent.data.references
+  const params = { RequestItems: {}}
+  params.RequestItems[dbConfigs.tlmdCW.TableName] = [parent].concat(children).map(obj => { return {PutRequest: {Item: obj}}; } )
+  console.log('BatchWrite params', util.obj2str(params));
+  batchPut(params).then(function(data) { console.log('batchPut OK'); }, function(error) { console.log('Error with batchPut', error); })
 }
 
-function addObject(payload) {
-  const objAlias = util.propstr(payload, ['uuid', 'itemType']) // display only subset of attributes
-  const record = setObjectKeyByItemtype(payload)
-  insertRecord(cwQuery.insertParams(record)).then(function(data) {
-    console.log('Insert OK', objAlias);
-    addChildMetadata(record)
-  }, function(error) {
-    console.log('Unable to insert object '+objAlias, util.obj2str(error));
-  })
-}
-
-function addChildMetadata(payload) {
-  if (payload.data.childUuid) {
-    let childMetadata = {
-      pk: payload.data.childUuid,
-      sk: payload.data.childUuid,
-      data: payload.data
-    }
-    const putParams = cwQuery.getInsertParams(childMetadata).setCondition('attribute_not_exists(#pk)').setName('pk').get()
-    console.log('Create metadata object for child id ', payload.data.childUuid, putParams);
-    insertRecord(putParams).then(function(data) { console.log('Insert OK', util.obj2str(data)); },
-      function(error) { console.log('Insert Error', util.obj2str(error)); })
-  }
-  else console.log('No child record contained in this payload', payload);
+function addMetadata(payload) {
+  const dtf = tfm.init(dbConfigs.tlmdCW)
+  const record = util.copy(payload) // Object.assign({}, payload)
+  record[dtf.pk] = payload.uuid
+  record[dtf.sk] = payload.uuid
+  delete record.uuid
+  const putParams = cwQuery.getInsertParams(record).setCondition('attribute_not_exists(#pk)').setName('pk').get()
+  console.log('Create metadata object for child id ', putParams);
+  insertRecord(putParams).then(function(data) { console.log('Insert OK', util.obj2str(data)); },
+    function(error) { console.log('Insert Error', util.obj2str(error)); })
 }
 
 function updateObject(payload) {
@@ -167,6 +167,13 @@ function insertRecord(params) {
   return new Promise((resolve, reject) => {
     const docClient = new AWS.DynamoDB.DocumentClient();
     docClient.put(params, function(err, data) { if (err) reject(err); else resolve(data) })
+  })
+}
+
+function batchPut(params) {
+  return new Promise((resolve, reject) => {
+    const docClient = new AWS.DynamoDB.DocumentClient();
+    docClient.batchWrite(params, function(err, data) { if (err) reject(err); else resolve(data) })
   })
 }
 

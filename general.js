@@ -85,6 +85,8 @@ function abbrevId(id, len = 6) {
   return parts[last].substr(-1*len)
 }
 
+function copy(source) { return Object.assign({}, source) }
+
 module.exports = {
   readFile: readFile,
   readConfig: readConfig,
@@ -95,5 +97,6 @@ module.exports = {
   convertUnixDate: convertUnixDate,
   copyFields: copyFields,
   noblanks: noblanks,
-  abbrevId: abbrevId
+  abbrevId: abbrevId,
+  copy: copy
 }
