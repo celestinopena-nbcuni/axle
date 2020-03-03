@@ -141,16 +141,11 @@ async function updateRevision(payload) {
     console.log('Problem updating revision!', record);
     return
   }
-  console.log('Insert new revision', record);
-
-  /*
   insertRecord(cwQuery.insertParams(record)).then(function(data) {
-    console.log('Insert revision OK');
+    console.log('Insert revision OK', record);
   }, function(error) {
     console.log('Unable to insert revision', util.obj2str(error));
   })
-  */
-
 }
 
 async function setObjectKeyByRevision(payload, keyfields = []) {
@@ -168,13 +163,21 @@ async function setObjectKeyByRevision(payload, keyfields = []) {
     if (v0revision) {
       // Update the v0 record with the new revision
       revisionIndex = v0revision.latest + 1
+      const uParams = cwQuery.getUpdateQuery(record.pk, `v0_${payload.itemType}`).setExpr('set #latest = :ver, #data = :data').names(['latest', 'data']).values({'ver': revisionIndex, 'data': record.data}).get()
+      updateRecord(uParams).then(function(data) {
+        console.log('v0 record updated with rev.', revisionIndex, data);
+      }).catch(function(err) {
+        console.log('Problem with v0 record update', uParams, err);
+      })
     } else {
       // Insert a 'v0' record
       v0revision = util.copy(record)
       v0revision.sk = `v0_${payload.itemType}`
       v0revision.latest = 1
+      insertRecord(cwQuery.insertParams(v0revision)).then(function(data) {
+        console.log('Inserted new v0 revision record for', payload.uuid);
+      })
     }
-    // const revisionIndex = v0revision ? v0revision.latest+1 : 0
     record.sk = `v${revisionIndex}_${payload.itemType}`
     return record
   }).catch(function(err) {
