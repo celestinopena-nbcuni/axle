@@ -63,13 +63,27 @@ function createTable(params) {
 }
 
 function readPayload(payload) {
+  const recordOk = validate(payload)
+  if (!recordOk) {
+    console.log('Payload fails validation!', Object.keys(payload));
+    return
+  }
   const action = payload.action
-  if (!action) console.log('No action specified for', payload.uuid, payload.itemType);
-  else if (action=='insert') addObject(payload)
+  if (action=='insert') addObject(payload)
   else if (action=='update') updateObject(payload)
+  else if (action=='xupdate') updateRevision(payload)
   else if (action=='delete') deleteObject(payload)
-  else if (action=='x')  console.log('option x', payload);
-  else console.log('Action NOT recognized', action);
+  else if (action=='x') {
+    console.log('Payload validates?', validate(payload))
+  }
+}
+
+function validate(payload) {
+  if (!payload) return false
+  else if (!payload.action) return false
+  else if (!payload.uuid) return false
+  else if (!payload.itemType) return false
+  else return true
 }
 
 function addObject(payload) {
@@ -116,14 +130,70 @@ function addMetadata(payload) {
     function(error) { console.log('Insert Error', util.obj2str(error)); })
 }
 
-function updateObject(payload) {
+function updatePublishdateParams(payload) {
   const record = setObjectKeyByItemtype(payload)
-  const docClient = new AWS.DynamoDB.DocumentClient();
-  const updateParams = cwQuery.getUpdateQuery(record.pk, record.sk).setExpr('set #data.#datePublished = :dt').names(['data', 'datePublished']).exprValue('dt', record.data.datePublished).get()
-  console.log('Update existing object', updateParams);
-  docClient.update(updateParams, function(err, data) {
-    if (err) console.log('Error on update', util.obj2str(err));
-    else console.log('Update OK', data);
+  return cwQuery.getUpdateQuery(record.pk, record.sk).setExpr('set #data.#datePublished = :dt').names(['data', 'datePublished']).exprValue('dt', record.data.datePublished).get()
+}
+
+async function updateRevision(payload) {
+  const record = await setObjectKeyByRevision(payload)
+  if (!(record)) { // && record.changes
+    console.log('Problem updating revision!', record);
+    return
+  }
+  console.log('Insert new revision', record);
+
+  /*
+  insertRecord(cwQuery.insertParams(record)).then(function(data) {
+    console.log('Insert revision OK');
+  }, function(error) {
+    console.log('Unable to insert revision', util.obj2str(error));
+  })
+  */
+
+}
+
+async function setObjectKeyByRevision(payload, keyfields = []) {
+  let record = Object.keys(payload).reduce((orig, curr) => {
+    if (keyfields.includes(curr)) orig[curr] = payload[curr]
+    else                          orig.data[curr] = payload[curr]
+    return orig
+  }, { data: {} })
+  record.pk = payload.uuid
+  // Set the SK with a versioned prefix, 'v0' or 'vN'; get current latest version otherwise use v0
+  return getPartition(payload.uuid).then(function(data) {
+    console.log('Found partition', data)
+    let v0revision = data.Items.find(item => item.latest>0)
+    let revisionIndex = 1
+    if (v0revision) {
+      // Update the v0 record with the new revision
+      revisionIndex = v0revision.latest + 1
+    } else {
+      // Insert a 'v0' record
+      v0revision = util.copy(record)
+      v0revision.sk = `v0_${payload.itemType}`
+      v0revision.latest = 1
+    }
+    // const revisionIndex = v0revision ? v0revision.latest+1 : 0
+    record.sk = `v${revisionIndex}_${payload.itemType}`
+    return record
+  }).catch(function(err) {
+    console.log('Caught error in getPartition', err);
+    return null
+  })
+}
+
+function updateObject(payload) {
+  const params = updatePublishdateParams(payload)
+  console.log('Update existing object', params);
+  if (!params) {
+    console.log('Invalid params for update');
+    return
+  }
+  updateRecord(params).then(function(data) {
+    console.log('Update OK', data);
+  }).catch(function(err) {
+    console.log('Error with Update', util.obj2str(err));
   })
 }
 
@@ -156,7 +226,7 @@ function setObjectKeyByItemtype(payload, keyfields = []) {
   }
   else {
     record.pk = payload.uuid
-    record.sk = (payload.childUuid || payload.title)
+    record.sk = (payload.childUuid || payload.uuid)
   }
   record['GSI1-PK'] = record.sk
   record['GSI1-SK'] = record.pk
@@ -167,6 +237,13 @@ function insertRecord(params) {
   return new Promise((resolve, reject) => {
     const docClient = new AWS.DynamoDB.DocumentClient();
     docClient.put(params, function(err, data) { if (err) reject(err); else resolve(data) })
+  })
+}
+
+function updateRecord(params) {
+  return new Promise((resolve, reject) => {
+    const docClient = new AWS.DynamoDB.DocumentClient();
+    docClient.update(params, function(err, data) { if (err) reject(err); else resolve(data) })
   })
 }
 
@@ -182,5 +259,12 @@ function getMetadata(pkvalue) {
   return new Promise((resolve, reject) => {
     const docClient = new AWS.DynamoDB.DocumentClient();
     docClient.query(qparams, function (err, data) { if (err) reject(err); else resolve(data) })
+  })
+}
+
+function getPartition(pkvalue) {
+  return new Promise((resolve, reject) => {
+    const docClient = new AWS.DynamoDB.DocumentClient();
+    docClient.query(cwQuery.getTableQuery(pkvalue), function (err, data) { if (err) reject(err); else resolve(data) })
   })
 }
