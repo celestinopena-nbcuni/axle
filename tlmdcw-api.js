@@ -1,7 +1,7 @@
 const AWS = require('aws-sdk'),
-  _ = require('lodash'),
   dbConfigs = require('./db-configs'),
   dbQuery = require('./tableQuery'),
+  dbClient = require('./dbClient').init(),
   util = require('./general'),
   tfm = require('./datatransformer')
 
@@ -74,7 +74,7 @@ function readPayload(payload) {
   else if (action=='xupdate') updateRevision(payload)
   else if (action=='delete') deleteObject(payload)
   else if (action=='x') {
-    console.log('Payload validates?', validate(payload))
+    console.log('Payload', payload)
   }
 }
 
@@ -270,4 +270,27 @@ function getPartition(pkvalue) {
     const docClient = new AWS.DynamoDB.DocumentClient();
     docClient.query(cwQuery.getTableQuery(pkvalue), function (err, data) { if (err) reject(err); else resolve(data) })
   })
+}
+
+async function add(payload) {
+  const rootLevelFields = ['itemType', 'slug']
+  try {
+    const record = setObjectKeyByItemtype(payload, rootLevelFields)
+    await dbClient.insert(cwQuery.insertParams(record))
+    console.log('Insert single record OK', record);
+  }
+  catch (err) {
+    console.log('Error on add', err);
+  }
+}
+
+async function removeObject(payload) {
+  try {
+    const record = setObjectKeyByItemtype(payload)
+    await dbClient.remove(cwQuery.getDeleteParams(record))
+    console.log('Delete record OK', record);
+  }
+  catch (err) {
+    console.log('Error on remove', err);
+  }
 }

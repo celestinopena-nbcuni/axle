@@ -5,6 +5,7 @@ const AWS = require('aws-sdk'),
   _ = require('lodash'),
   dbConfigs = require('./db-configs'),
   dbQuery = require('./tableQuery'),
+  dbClient = require('./dbClient').init(),
   util = require('./general')
 
 const filmQuery = dbQuery.init(dbConfigs.films)
@@ -18,8 +19,10 @@ if (!cmdlineParams) {
   console.log('  D = delete table');
   console.log('  L filename = load the given json file into the database');
   console.log('  R filename = read the given json file');
+  console.log('  RC filename = read the given config (YAML) file');
   console.log('  Q pk sk = query table by PK and SK');
   console.log('  QL pk sk = query local index by PK and SK');
+  console.log('  X = test dbClient');
 } else {
   // showCredentials()
   hitDB(cmdlineParams)
@@ -46,6 +49,12 @@ function hitDB(cmd = 'Q') {
       } else if (cmd==='R') {
         const datafile = arg(2)
         if (datafile) readTelemundoDatafile(datafile, (arg(3) ? false : true))
+      } else if (cmd==='RC') {
+        const fn=util.arg(2) || './settings.yaml'
+        const obj=util.readConfig(fn)
+        console.log('Config=', obj, obj.title);
+      } else if (cmd==='X') {
+        showTables()
       } else if (cmd==='Q') {
         const pk=util.arg(2)
         const sk=util.arg(3)
@@ -80,6 +89,22 @@ function createTable(params, tablename) {
       console.log('Created table. Table description JSON:', JSON.stringify(data, null, 2));
     }
   })
+}
+
+async function showTables() {
+  /*
+  try {
+    const tname = dbConfigs.films.TableName
+    const tableExists = await dbClient.hasTable(tname)
+    console.log('Table defined?', tname, tableExists);
+  }
+  catch (err) {
+    console.log('Problem listing tables');
+  }
+  */
+  dbClient.hasTable(dbConfigs.films.TableName).then(function(data) {
+    console.log('Table '+dbConfigs.films.TableName, data);
+  }).catch(function(err) { console.log('Sorry could not list tables');})
 }
 
 function loadTable(datafile, tablename) {

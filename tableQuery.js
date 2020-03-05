@@ -22,6 +22,17 @@ function init(dbConfig) {
     if (projection) config.ProjectionExpression = projection
     return config
   }
+  function getDeleteParams(record) {
+    const pk = getTablePK() || 'pk'
+    const sk = getTableSK() || 'sk'
+    let config = {
+      TableName: dbConfig.TableName,
+      Key: {}
+    }
+    config.Key[pk] = record[pk]
+    config.Key[sk] = record[sk]
+    return config
+  }
   // A convenience function for getInsertParams
   function insertParams(record) { return getInsertParams(record).get() }
   function getInsertParams(record) {
@@ -243,6 +254,7 @@ function init(dbConfig) {
     getUpdateQuery: getUpdateQuery,
     getInsertParams: getInsertParams,
     insertParams: insertParams,
+    getDeleteParams: getDeleteParams,
     getTable: getTable
   }
 } // init
