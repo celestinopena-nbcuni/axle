@@ -1,4 +1,4 @@
-/* This library provides an object which facilitates the generation of query parameter objects. */
+/* This library provides an object which facilitates the generation of parameter objects for database commands. */
 function init(dbConfig) {
   function getTable() { return dbConfig.TableName; }
   function getTablePK() {
@@ -64,6 +64,11 @@ function init(dbConfig) {
       setName: setName,
       get: get
     }
+  }
+  function getBatchWriteParams(records) {
+    const config = { RequestItems: {}}
+    config.RequestItems[dbConfig.TableName] = records.map(obj => { return {PutRequest: {Item: obj}}; } )
+    return config
   }
   function getUpdateQuery(pkvalue, skvalue) {
     const pk = getTablePK() || 'pk'
@@ -246,12 +251,13 @@ function init(dbConfig) {
       toString: toString,
       explain: explain
     }
-  }
+  } // configureIndex
   return {
     getLocalIndexQuery: getLocalIndexQuery,
     getGlobalIndexQuery: getGlobalIndexQuery,
     getTableQuery: getTableQuery,
     getUpdateQuery: getUpdateQuery,
+    getBatchWriteParams: getBatchWriteParams,
     getInsertParams: getInsertParams,
     insertParams: insertParams,
     getDeleteParams: getDeleteParams,
