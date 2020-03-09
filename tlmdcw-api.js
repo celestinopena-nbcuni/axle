@@ -19,29 +19,18 @@ else {
   else console.log('Problem reading', datafile)
 }
 
-function init(payload) {
-  AWS.config.getCredentials(async function(err) {
-    if (err) {
-      console.log(err.stack);
-      return
-    } // credentials not loaded
-
-    AWS.config.update({
-      region: 'us-east-1',
-      endpoint: 'http://localhost:8000'
-    });
-    try {
-      const tableExists = await dbClient.hasTable(dbConfigs.tlmdCW.TableName)
-      if (tableExists) {
-        readPayload(payload)
-      } else {
-        const stats = await dbClient.createTable(dbConfigs.tlmdCW)
-        console.log(`Table ${dbConfigs.tlmdCW.TableName} created:`, stats);
-      }
-    } catch (err) {
-      console.log('Unable to list tables');
+async function init(payload) {
+  try {
+    const tableExists = await dbClient.hasTable(dbConfigs.tlmdCW.TableName)
+    if (tableExists) {
+      readPayload(payload)
+    } else {
+      const stats = await dbClient.createTable(dbConfigs.tlmdCW)
+      console.log(`Table ${dbConfigs.tlmdCW.TableName} created:`, stats);
     }
-  })
+  } catch (err) {
+    console.log('Unable to list tables');
+  }
 }
 
 function readPayload(payload) {
@@ -247,7 +236,7 @@ async function deleteObjectTree(payload) {
     const data = await dbClient.query(cwQuery.queryParams(record))
     data.Items.forEach(async function(item) {
       console.log('Remove child', item.sk);
-      // await dbClient.remove(cwQuery.getDeleteParams(item))
+      await dbClient.remove(cwQuery.getDeleteParams(item))
     })
   }
   catch (err) { console.log('Oops', err);
