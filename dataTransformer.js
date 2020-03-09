@@ -1,3 +1,6 @@
+/* This library contains generic utility functions */
+const util = require('./general')
+
 function init(dbConfig) {
   const PK = getTablePK()
   const SK = getTableSK()
@@ -31,6 +34,14 @@ function init(dbConfig) {
     const key = idx.KeySchema.find(item => item.KeyType=='RANGE')
     return key ? key.AttributeName : null
   }
+  // Make a copy of an object and set its PK and SK to the same value
+  function setPrimaryRecord(record, idfield) {
+    const newobj = util.copy(record)
+    newobj[PK] = record[idfield]
+    newobj[SK] = record[idfield]
+    delete newobj[idfield]
+    return newobj
+  }
   function setObjectKeyByItemtype(payload, keyfields = []) {
     let record = Object.keys(payload).reduce((orig, curr) => {
       if (keyfields.includes(curr)) orig[curr] = payload[curr]
@@ -58,6 +69,7 @@ function init(dbConfig) {
     getIndexSK: getIndexSK,
     getLocalIndexPK: getLocalIndexPK,
     getLocalIndexSK: getLocalIndexSK,
+    setPrimaryRecord: setPrimaryRecord,
     setObjectKeyByItemtype: setObjectKeyByItemtype
   }
 }

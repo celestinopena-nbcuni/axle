@@ -2,9 +2,9 @@ const AWS = require('aws-sdk'),
   dbConfigs = require('./db-configs'),
   dbQuery = require('./tableQuery'),
   dbClient = require('./dbClient').init('us-east-1', 'http://localhost:8000'),
-  util = require('./general'),
-  tfm = require('./datatransformer')
+  util = require('./general')
 
+const transformer = require('./datatransformer').init(dbConfigs.tlmdCW)
 const cwQuery = dbQuery.init(dbConfigs.tlmdCW)
 const indexes = {
   'Q1': cwQuery.getLocalIndexQuery('Itemtype'),
@@ -226,11 +226,7 @@ async function addBatch(payload, rootLevelFields) {
 }
 
 async function addPrimaryRecord(payload) {
-  const dtf = tfm.init(dbConfigs.tlmdCW)
-  const record = util.copy(payload)
-  record[dtf.pk] = payload.uuid
-  record[dtf.sk] = payload.uuid
-  delete record.uuid
+  const record = transformer.setPrimaryRecord(payload, 'uuid')
   const putParams = cwQuery.getInsertParams(record).setCondition('attribute_not_exists(#pk)').setName('pk').get()
   try {
     await dbClient.insert(putParams)
