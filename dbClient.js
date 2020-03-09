@@ -31,7 +31,10 @@ function init(region, endpoint) {
   }
 
   async function update(params) {
-    try { await docClient.update(params).promise() }
+    try {
+      const data = await docClient.update(params).promise()
+      return data
+    }
     catch (err) { return err }
   }
 

@@ -68,18 +68,20 @@ function validate(payload) {
   else return true
 }
 
-function updateObject1(payload) {
+async function updateObject1(payload) {
   const params = updatePublishdateParams(payload)
   console.log('Update existing object', params);
   if (!params) {
     console.log('Invalid params for update');
     return
   }
-  updateRecord(params).then(function(data) {
+  try {
+    const data = await dbClient.update(params)
     console.log('Update OK', data);
-  }).catch(function(err) {
+  }
+  catch (err) {
     console.log('Error with Update', util.obj2str(err));
-  })
+  }
 }
 
 async function updateRevision(payload) {
@@ -166,28 +168,6 @@ function setObjectKeyByItemtype(payload, keyfields = []) {
   record['GSI1-PK'] = record.sk
   record['GSI1-SK'] = record.pk
   return record
-}
-
-function updateRecord(params) {
-  return new Promise((resolve, reject) => {
-    const docClient = new AWS.DynamoDB.DocumentClient();
-    docClient.update(params, function(err, data) { if (err) reject(err); else resolve(data) })
-  })
-}
-
-function getMetadata(pkvalue) {
-  const qparams=cwQuery.getTableQuery(pkvalue, pkvalue) // the metadata record has same value for PK and SK
-  return new Promise((resolve, reject) => {
-    const docClient = new AWS.DynamoDB.DocumentClient();
-    docClient.query(qparams, function (err, data) { if (err) reject(err); else resolve(data) })
-  })
-}
-
-function getPartition(pkvalue) {
-  return new Promise((resolve, reject) => {
-    const docClient = new AWS.DynamoDB.DocumentClient();
-    docClient.query(cwQuery.getTableQuery(pkvalue), function (err, data) { if (err) reject(err); else resolve(data) })
-  })
 }
 
 async function addObject(payload) {
