@@ -1,8 +1,21 @@
 /* Low level commands to Document Client */
 const AWS = require('aws-sdk')
 
-function init() {
-  const docClient = new AWS.DynamoDB.DocumentClient();
+function init(region, endpoint) {
+  let docClient = null
+  AWS.config.getCredentials(function(err) {
+    if (err) {
+      console.log('Configuration error: Unable to set region and endpoint', err.stack);
+      return
+    } // credentials not loaded
+
+    AWS.config.update({
+      'region': region,
+      'endpoint': endpoint
+    });
+    docClient = new AWS.DynamoDB.DocumentClient();
+  })
+  // console.log('docClient:', docClient?'Yes':'No');
 
   async function query(params) {
     try {

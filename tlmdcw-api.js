@@ -1,7 +1,7 @@
 const AWS = require('aws-sdk'),
   dbConfigs = require('./db-configs'),
   dbQuery = require('./tableQuery'),
-  dbClient = require('./dbClient').init(),
+  dbClient = require('./dbClient').init('us-east-1', 'http://localhost:8000'),
   util = require('./general'),
   tfm = require('./datatransformer')
 
@@ -51,10 +51,10 @@ function readPayload(payload) {
     return
   }
   const action = payload.action
-  if (action=='insert') addObject1(payload)
+  if (action=='insert') addObject(payload)
   else if (action=='update') updateObject1(payload)
   else if (action=='xupdate') updateRevision(payload)
-  else if (action=='delete') deleteObject1(payload)
+  else if (action=='delete') deleteObjectTree(payload)
   else if (action=='x') {
     console.log('Payload', payload)
   }
@@ -66,22 +66,6 @@ function validate(payload) {
   else if (!payload.uuid) return false
   else if (!payload.itemType) return false
   else return true
-}
-
-function addObject1(payload) {
-  const rootLevelFields = ['itemType', 'slug']
-  if (payload.references) {
-    createBatchInsert(payload, rootLevelFields)
-    payload.references.forEach(item => { addMetadata(item) }); // add metadata records for child records
-  } else {
-    const record = setObjectKeyByItemtype(payload, rootLevelFields)
-    console.log('Insert single record', record);
-    insertRecord(cwQuery.insertParams(record)).then(function(data) {
-      console.log('Insert OK');
-    }, function(error) {
-      console.log('Unable to insert object', util.obj2str(error));
-    })
-  }
 }
 
 function updateObject1(payload) {
@@ -112,51 +96,6 @@ async function updateRevision(payload) {
   catch (err) {
     console.log('Unable to insert revision', util.obj2str(error));
   }
-}
-
-function deleteObject1(payload) {
-  const record = setObjectKeyByItemtype(payload)
-  const docClient = new AWS.DynamoDB.DocumentClient();
-  const params = {
-    TableName: cwQuery.getTable(),
-    Key: {
-      'pk': record.pk,
-      'sk': record.sk
-    }
-  }
-  console.log('Delete object', params);
-  docClient.delete(params, function(err, data) {
-    if (err) console.log('Error on updatd', util.obj2str(err));
-    else console.log('Delete OK', data);
-  })
-}
-
-function createBatchInsert(payload, rootLevelFields) {
-  const parent = setObjectKeyByItemtype(payload, rootLevelFields)
-  const children = payload.references.reduce((orig, curr) => {
-    let item = util.copy(curr) // Object.assign({}, curr)
-    item.childUuid = curr.uuid // child
-    item.uuid = payload.uuid   // parent
-    orig.push(setObjectKeyByItemtype(item, rootLevelFields))
-    return orig
-  }, [])
-  delete parent.data.references
-  const params = { RequestItems: {}}
-  params.RequestItems[dbConfigs.tlmdCW.TableName] = [parent].concat(children).map(obj => { return {PutRequest: {Item: obj}}; } )
-  console.log('BatchWrite params', util.obj2str(params));
-  batchPut(params).then(function(data) { console.log('batchPut OK'); }, function(error) { console.log('Error with batchPut', error); })
-}
-
-function addMetadata(payload) {
-  const dtf = tfm.init(dbConfigs.tlmdCW)
-  const record = util.copy(payload) // Object.assign({}, payload)
-  record[dtf.pk] = payload.uuid
-  record[dtf.sk] = payload.uuid
-  delete record.uuid
-  const putParams = cwQuery.getInsertParams(record).setCondition('attribute_not_exists(#pk)').setName('pk').get()
-  console.log('Create metadata object for child id ', putParams);
-  insertRecord(putParams).then(function(data) { console.log('Insert OK', util.obj2str(data)); },
-    function(error) { console.log('Insert Error', util.obj2str(error)); })
 }
 
 function updatePublishdateParams(payload) {
@@ -210,44 +149,6 @@ async function setObjectKeyByRevision(payload, keyfields = []) {
   }
 }
 
-async function setObjectKeyByRevision1(payload, keyfields = []) {
-  let record = Object.keys(payload).reduce((orig, curr) => {
-    if (keyfields.includes(curr)) orig[curr] = payload[curr]
-    else                          orig.data[curr] = payload[curr]
-    return orig
-  }, { data: {} })
-  record.pk = payload.uuid
-  // Set the SK with a versioned prefix, 'v0' or 'vN'; get current latest version otherwise use v0
-  return getPartition(payload.uuid).then(function(data) {
-    console.log('Found partition', data)
-    let v0revision = data.Items.find(item => item.latest>0)
-    let revisionIndex = 1
-    if (v0revision) {
-      // Update the v0 record with the new revision
-      revisionIndex = v0revision.latest + 1
-      const uParams = cwQuery.getUpdateQuery(record.pk, `v0_${payload.itemType}`).setExpr('set #latest = :ver, #data = :data').names(['latest', 'data']).values({'ver': revisionIndex, 'data': record.data}).get()
-      updateRecord(uParams).then(function(data) {
-        console.log('v0 record updated with rev.', revisionIndex, data);
-      }).catch(function(err) {
-        console.log('Problem with v0 record update', uParams, err);
-      })
-    } else {
-      // Insert a 'v0' record
-      v0revision = util.copy(record)
-      v0revision.sk = `v0_${payload.itemType}`
-      v0revision.latest = 1
-      insertRecord(cwQuery.insertParams(v0revision)).then(function(data) {
-        console.log('Inserted new v0 revision record for', payload.uuid);
-      })
-    }
-    record.sk = `v${revisionIndex}_${payload.itemType}`
-    return record
-  }).catch(function(err) {
-    console.log('Caught error in getPartition', err);
-    return null
-  })
-}
-
 function setObjectKeyByItemtype(payload, keyfields = []) {
   let record = Object.keys(payload).reduce((orig, curr) => {
     if (keyfields.includes(curr)) orig[curr] = payload[curr]
@@ -267,24 +168,10 @@ function setObjectKeyByItemtype(payload, keyfields = []) {
   return record
 }
 
-function insertRecord(params) {
-  return new Promise((resolve, reject) => {
-    const docClient = new AWS.DynamoDB.DocumentClient();
-    docClient.put(params, function(err, data) { if (err) reject(err); else resolve(data) })
-  })
-}
-
 function updateRecord(params) {
   return new Promise((resolve, reject) => {
     const docClient = new AWS.DynamoDB.DocumentClient();
     docClient.update(params, function(err, data) { if (err) reject(err); else resolve(data) })
-  })
-}
-
-function batchPut(params) {
-  return new Promise((resolve, reject) => {
-    const docClient = new AWS.DynamoDB.DocumentClient();
-    docClient.batchWrite(params, function(err, data) { if (err) reject(err); else resolve(data) })
   })
 }
 
@@ -315,7 +202,7 @@ async function addObject(payload) {
 }
 
 async function addBatch(payload, rootLevelFields) {
-  payload.references.forEach(item => {
+  payload.references.forEach(async function(item) {
     await addPrimaryRecord(item)
   }); // add metadata records for child records
   const parent = setObjectKeyByItemtype(payload, rootLevelFields)
@@ -328,7 +215,9 @@ async function addBatch(payload, rootLevelFields) {
   }, [])
   delete parent.data.references
   try {
-    await dbClient.batchInsert(cwQuery.getBatchWriteParams([parent].concat(children)))
+    const args = cwQuery.getBatchWriteParams([parent].concat(children))
+    console.log('batchInsert params', util.obj2str(args));
+    await dbClient.batchInsert(args)
     console.log('batchInsert OK');
   }
   catch (err) {
@@ -343,9 +232,9 @@ async function addPrimaryRecord(payload) {
   record[dtf.sk] = payload.uuid
   delete record.uuid
   const putParams = cwQuery.getInsertParams(record).setCondition('attribute_not_exists(#pk)').setName('pk').get()
-  console.log('Create metadata for child object', putParams);
   try {
     await dbClient.insert(putParams)
+    console.log('Create metadata for child object', putParams);
   }
   catch (err) {
     console.log('Error on addPrimaryRecord', err);
@@ -368,9 +257,23 @@ async function deleteObject(payload) {
   try {
     const record = setObjectKeyByItemtype(payload)
     await dbClient.remove(cwQuery.getDeleteParams(record))
-    console.log('Delete record OK', record);
+    console.log('Delete record OK');
   }
   catch (err) {
     console.log('Error on remove', err);
+  }
+}
+
+// Delete an object and its children
+async function deleteObjectTree(payload) {
+  const record = setObjectKeyByItemtype(payload)
+  try {
+    const data = await dbClient.query(cwQuery.queryParams(record))
+    data.Items.forEach(async function(item) {
+      console.log('Remove child', item.sk);
+      // await dbClient.remove(cwQuery.getDeleteParams(item))
+    })
+  }
+  catch (err) { console.log('Oops', err);
   }
 }

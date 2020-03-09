@@ -1,5 +1,7 @@
 /* This library provides an object which facilitates the generation of parameter objects for database commands. */
 function init(dbConfig) {
+  const PK = getTablePK() || 'pk'
+  const SK = getTableSK() || 'sk'
   function getTable() { return dbConfig.TableName; }
   function getTablePK() {
     const key = dbConfig.KeySchema.find(item => item.KeyType=='HASH')
@@ -9,14 +11,14 @@ function init(dbConfig) {
     const key = dbConfig.KeySchema.find(item => item.KeyType=='RANGE')
     return key ? key.AttributeName : null
   }
+  function queryParams(record, projection) {
+    return getTableQuery(record[PK], null, projection)
+  }
   function getTableQuery(pkvalue, skvalue, projection) {
-    const pk = getTablePK() || 'pk'
-    const sk = getTableSK() || 'sk'
     let config = {
       TableName: dbConfig.TableName,
-      // KeyConditionExpression: skvalue ? '#pk = :pk AND #sk = :sk' : '#pk = :pk',
       KeyConditionExpression: skvalue ? '#pk = :pk AND begins_with(#sk, :sk)' : '#pk = :pk',
-      ExpressionAttributeNames: skvalue ? {'#pk': pk, '#sk': sk} : {'#pk': pk},
+      ExpressionAttributeNames: skvalue ? {'#pk': PK, '#sk': SK} : {'#pk': PK},
       ExpressionAttributeValues: skvalue ? {':pk': pkvalue, ':sk': skvalue} : {':pk': pkvalue}
     }
     if (projection) config.ProjectionExpression = projection
@@ -256,6 +258,7 @@ function init(dbConfig) {
     getLocalIndexQuery: getLocalIndexQuery,
     getGlobalIndexQuery: getGlobalIndexQuery,
     getTableQuery: getTableQuery,
+    queryParams: queryParams,
     getUpdateQuery: getUpdateQuery,
     getBatchWriteParams: getBatchWriteParams,
     getInsertParams: getInsertParams,
