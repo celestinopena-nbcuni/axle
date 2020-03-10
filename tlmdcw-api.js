@@ -45,8 +45,15 @@ function readPayload(payload) {
   else if (action=='xupdate') updateRevision(payload)
   else if (action=='delete') deleteObjectTree(payload)
   else if (action=='x') {
-    console.log('Payload', payload)
+    // console.log('Payload', payload)
+    tryit(payload)
   }
+}
+
+function tryit(payload) {
+  const record = setObjectKeyByItemtype(payload)
+  const cfg = cwQuery.getTransactParams().toString()
+  console.log('Transact param', cfg);
 }
 
 function validate(payload) {

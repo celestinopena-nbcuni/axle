@@ -67,6 +67,28 @@ function init(dbConfig) {
       get: get
     }
   }
+
+  function getTransactParams(record) {
+    let config = { TransactItems: [] }
+    function get() { return config }
+    function addPut(param) {
+      config.TransactItems.push(createPut(param))
+      return this
+    }
+    function createPut(param) {
+      if (!param.TableName) param.TableName = dbConfig.TableName
+      return { Put: param }
+    }
+    function toString() {
+      return JSON.stringify(config, null, 2)
+    }
+    return {
+      addPut: addPut,
+      toString: toString,
+      get: get
+    }
+  }
+
   function getBatchWriteParams(records) {
     const config = { RequestItems: {}}
     config.RequestItems[dbConfig.TableName] = records.map(obj => { return {PutRequest: {Item: obj}}; } )
@@ -261,6 +283,7 @@ function init(dbConfig) {
     queryParams: queryParams,
     getUpdateQuery: getUpdateQuery,
     getBatchWriteParams: getBatchWriteParams,
+    getTransactParams: getTransactParams,
     getInsertParams: getInsertParams,
     insertParams: insertParams,
     getDeleteParams: getDeleteParams,
