@@ -41,7 +41,7 @@ function readPayload(payload) {
   }
   const action = payload.action
   if (action=='insert') addObject(payload)
-  else if (action=='update') updateObject1(payload)
+  else if (action=='update') updateObject(payload)
   else if (action=='xupdate') updateRevision(payload)
   else if (action=='delete') deleteObjectTree(payload)
   else if (action=='x') {
@@ -57,7 +57,7 @@ function validate(payload) {
   else return true
 }
 
-async function updateObject1(payload) {
+async function updateObject(payload) {
   const params = updatePublishdateParams(payload)
   console.log('Update existing object', params);
   if (!params) {
@@ -239,6 +239,7 @@ async function deleteObjectTree(payload) {
       await dbClient.remove(cwQuery.getDeleteParams(item))
     })
   }
-  catch (err) { console.log('Oops', err);
+  catch (err) {
+    console.log('Error on cascade delete', err);
   }
 }

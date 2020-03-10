@@ -48,6 +48,15 @@ function init(region, endpoint) {
     catch (err) { return err }
   }
 
+  async function transaction(params) {
+    const dynamodb = new AWS.DynamoDB();
+    try {
+      const data = await dynamodb.transactWriteItems(params).promise()
+      return data
+    }
+    catch (err) { return err }
+  }
+
   async function createTable(params) {
     const dynamodb = new AWS.DynamoDB();
     try {
@@ -78,6 +87,7 @@ function init(region, endpoint) {
     query: query,
     insert: insert,
     update: update,
+    transaction: transaction,
     batchUpdate: batchUpdate,
     batchInsert: batchUpdate,
     remove: remove,
@@ -88,5 +98,5 @@ function init(region, endpoint) {
 
 module.exports = {
   init: init,
-  version: '0.0.1'
+  version: '0.0.2'
 }
