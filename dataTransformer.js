@@ -42,12 +42,31 @@ function init(dbConfig) {
     delete newobj[idfield]
     return newobj
   }
-  function setObjectKeyByItemtype(payload, keyfields = []) {
-    let record = Object.keys(payload).reduce((orig, curr) => {
+  function setPK(payload, pkvalue) {
+    const newobj = util.copy(payload)
+    newobj[PK] = pkvalue
+    return newobj
+  }
+  function setSK(payload, skvalue) {
+    const newobj = util.copy(payload)
+    if (skvalue) newobj[SK] = skvalue
+    return newobj
+  }
+  function setObjectKey(payload, pkfield, skfield, keyfields) {
+    const newobj = setRootFields(payload, keyfields)
+    newobj[PK] = payload[pkfield]
+    if (skfield) newobj[SK] = payload[skfield]
+    return newobj
+  }
+  function setRootFields(payload, keyfields = []) {
+    return Object.keys(payload).reduce((orig, curr) => {
       if (keyfields.includes(curr)) orig[curr] = payload[curr]
       else                          orig.data[curr] = payload[curr]
       return orig
     }, { data: {} })
+  }
+  function setObjectKeyByItemtype(payload, keyfields = []) {
+    let record = setRootFields(payload, keyfields)
     if (payload.itemType==='node') {
       record[PK] = payload.uuid
       record[SK] = `${util.convertUnixDate(payload.datePublished)}#${payload.itemType}`
@@ -69,7 +88,11 @@ function init(dbConfig) {
     getIndexSK: getIndexSK,
     getLocalIndexPK: getLocalIndexPK,
     getLocalIndexSK: getLocalIndexSK,
+    setPK: setPK,
+    setSK: setSK,
     setPrimaryRecord: setPrimaryRecord,
+    setRootFields: setRootFields,
+    setObjectKey: setObjectKey,
     setObjectKeyByItemtype: setObjectKeyByItemtype
   }
 }

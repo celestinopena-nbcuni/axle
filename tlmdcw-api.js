@@ -42,7 +42,10 @@ function readPayload(payload) {
   const action = payload.action
   if (action=='insert') addObject(payload)
   else if (action=='update') updateObject(payload)
-  else if (action=='xupdate') updateRevision(payload)
+  else if (action=='xupdate') {
+    // updateRevision(payload)
+    tryit(payload)
+  }
   else if (action=='delete') deleteObjectTree(payload)
   else if (action=='x') {
     // console.log('Payload', payload)
@@ -50,10 +53,31 @@ function readPayload(payload) {
   }
 }
 
-function tryit(payload) {
-  const record = setObjectKeyByItemtype(payload)
-  const cfg = cwQuery.getTransactParams().toString()
-  console.log('Transact param', cfg);
+async function tryit(payload) {
+  try {
+    const data = await dbClient.query(cwQuery.getTableQuery(payload.uuid))
+    if (data.Count===0) {
+      let record = transformer.setObjectKey(payload, 'uuid', 'uuid', ['itemType'])
+      const v0 = transformer.setSK(record, `v0_${payload.itemType}`)
+      v0.latest = 1
+      const v1 = transformer.setSK(record, `v1_${payload.itemType}`)
+      const cfg = cwQuery.getTransactParams().addPut({
+        Item: record,
+        ConditionExpression: 'attribute_not_exists(pk)'
+      })
+      .addPut({ Item: v0 })
+      .addPut({ Item: v1 })
+      console.log('Transact param', cfg.toString());
+      try {
+        const status = await dbClient.transaction(cfg.get())
+        console.log('Transaction result', status);
+      }
+      catch (err) { console.log('Error on transaction write', err); }
+    } else {
+      console.log('Partition exists for', payload.uuid, data.Count);
+    }
+  }
+  catch (err) { console.log('Unable to query', err); }
 }
 
 function validate(payload) {
@@ -81,12 +105,11 @@ async function updateObject(payload) {
 }
 
 async function updateRevision(payload) {
-  const record = await setObjectKeyByRevision(payload)
+  const record = await setObjectKeyByRevision(payload, ['itemType'])
   if (!(record)) { // && record.changes
     console.log('Problem updating revision!', record);
     return
   }
-  /* insertRecord(cwQuery.insertParams(record)).then(function(data) { }, function(error) { }) */
   try {
     await dbClient.insert(cwQuery.insertParams(record))
     console.log('Insert revision OK', record);
@@ -102,15 +125,11 @@ function updatePublishdateParams(payload) {
 }
 
 async function setObjectKeyByRevision(payload, keyfields = []) {
-  let record = Object.keys(payload).reduce((orig, curr) => {
-    if (keyfields.includes(curr)) orig[curr] = payload[curr]
-    else                          orig.data[curr] = payload[curr]
-    return orig
-  }, { data: {} })
+  let record = transformer.setRootFields(payload, keyfields)
   record.pk = payload.uuid
   // Set the SK with a versioned prefix, 'v0' or 'vN'; get current latest version otherwise use v0
   try {
-    const data = await dbClient.query(cwQuery.getTableQuery(pkvalue))
+    const data = await dbClient.query(cwQuery.getTableQuery(payload.uuid))
     console.log('Found partition', data)
     let v0revision = data.Items.find(item => item.latest>0)
     let revisionIndex = 1
