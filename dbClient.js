@@ -49,9 +49,8 @@ function init(region, endpoint) {
   }
 
   async function transaction(params) {
-    const dynamodb = new AWS.DynamoDB();
     try {
-      const data = await dynamodb.transactWriteItems(params).promise()
+      const data = await docClient.transactWrite(params).promise()
       return data
     }
     catch (err) { return err }
