@@ -23,6 +23,7 @@ async function init(payload) {
   try {
     const tableExists = await dbClient.hasTable(dbConfigs.tlmdCW.TableName)
     if (tableExists) {
+      console.log('tlmdcw >>', new Date().toLocaleString());
       readPayload(payload)
     } else {
       const stats = await dbClient.createTable(dbConfigs.tlmdCW)
@@ -56,8 +57,8 @@ function readPayload(payload) {
 async function tryit(payload) {
   try {
     const data = await dbClient.query(cwQuery.getTableQuery(payload.uuid))
+    const record = transformer.setObjectKey(payload, 'uuid', 'uuid', ['itemType'])
     if (data.Count===0) {
-      let record = transformer.setObjectKey(payload, 'uuid', 'uuid', ['itemType'])
       const v0 = transformer.setSK(record, `v0_${payload.itemType}`)
       v0.latest = 1
       const v1 = transformer.setSK(record, `v1_${payload.itemType}`)
@@ -74,7 +75,29 @@ async function tryit(payload) {
       }
       catch (err) { console.log('Error on transaction write', err); }
     } else {
-      console.log('Partition exists for', payload.uuid, data.Count);
+      const masterCopy = data.Items.find(item => item.sk === item.pk)
+      let v0revision = data.Items.find(item => item.latest>0)
+      let revisionIndex = 1
+      if (v0revision) {
+        console.log('Current revision for '+payload.uuid, v0revision.latest);
+        console.log('Master copy:', masterCopy);
+        revisionIndex = v0revision.latest + 1
+        const vNext = transformer.setSK(record, `v${revisionIndex}_${payload.itemType}`)
+        const uParams = cwQuery.getUpdateQuery(payload.uuid, `v0_${payload.itemType}`)
+          .setExpr('set #latest = :ver, #data = :data')
+          .names(['latest', 'data'])
+          .values({'ver': revisionIndex, 'data': record.data})
+          .get()
+        const cfg = cwQuery.getTransactParams().addPut({ Item: vNext }).addUpdate(uParams)
+        console.log('Transact param', cfg.toString());
+        try {
+          const status = await dbClient.transaction(cfg.get())
+          console.log('Transaction result', status);
+        }
+        catch (err) { console.log('Error on transaction write', err); }
+      } else {
+        console.log('No v0 record found!');
+      }
     }
   }
   catch (err) { console.log('Unable to query', err); }

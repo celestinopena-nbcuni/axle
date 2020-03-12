@@ -75,15 +75,24 @@ function init(dbConfig) {
       config.TransactItems.push(createPut(param))
       return this
     }
+    function addUpdate(param) {
+      config.TransactItems.push(createUpdate(param))
+      return this
+    }
     function createPut(param) {
       if (!param.TableName) param.TableName = dbConfig.TableName
       return { Put: param }
+    }
+    function createUpdate(param) {
+      if (!param.TableName) param.TableName = dbConfig.TableName
+      return { Update: param }
     }
     function toString() {
       return JSON.stringify(config, null, 2)
     }
     return {
       addPut: addPut,
+      addUpdate: addUpdate,
       toString: toString,
       get: get
     }
