@@ -45,23 +45,24 @@ function readPayload(payload) {
   else if (action=='update') updateObject(payload)
   else if (action=='xupdate') {
     // updateRevision(payload)
-    tryit(payload)
+    addVersionTransaction(payload)
   }
   else if (action=='delete') deleteObjectTree(payload)
   else if (action=='x') {
-    // console.log('Payload', payload)
-    tryit(payload)
+    console.log('Payload', payload)
   }
 }
 
-async function tryit(payload) {
+async function addVersionTransaction(payload) {
   try {
     const data = await dbClient.query(cwQuery.getTableQuery(payload.uuid))
     const record = transformer.setObjectKey(payload, 'uuid', 'uuid', ['itemType'])
     if (data.Count===0) {
+      // Create a first version, together with v0 record
       const v0 = transformer.setSK(record, `v0_${payload.itemType}`)
       v0.latest = 1
       const v1 = transformer.setSK(record, `v1_${payload.itemType}`)
+      // Add master copy and two version records in a transaction
       const cfg = cwQuery.getTransactParams().addPut({
         Item: record,
         ConditionExpression: 'attribute_not_exists(pk)'
@@ -75,12 +76,11 @@ async function tryit(payload) {
       }
       catch (err) { console.log('Error on transaction write', err); }
     } else {
-      const masterCopy = data.Items.find(item => item.sk === item.pk)
+      // const masterCopy = data.Items.find(item => item.sk === item.pk)
       let v0revision = data.Items.find(item => item.latest>0)
       let revisionIndex = 1
       if (v0revision) {
         console.log('Current revision for '+payload.uuid, v0revision.latest);
-        console.log('Master copy:', masterCopy);
         revisionIndex = v0revision.latest + 1
         const vNext = transformer.setSK(record, `v${revisionIndex}_${payload.itemType}`)
         const uParams = cwQuery.getUpdateQuery(payload.uuid, `v0_${payload.itemType}`)
@@ -96,7 +96,18 @@ async function tryit(payload) {
         }
         catch (err) { console.log('Error on transaction write', err); }
       } else {
-        console.log('No v0 record found!');
+        console.log('No version record found; creating v0 and v1 revisions.');
+        const v0 = transformer.setSK(record, `v0_${payload.itemType}`)
+        v0.latest = 1
+        const v1 = transformer.setSK(record, `v1_${payload.itemType}`)
+        // Add two version records in a transaction
+        const cfg = cwQuery.getTransactParams().addPut({ Item: v0 }).addPut({ Item: v1 })
+        console.log('Transact param', cfg.toString());
+        try {
+          const status = await dbClient.transaction(cfg.get())
+          console.log('Transaction result', status);
+        }
+        catch (err) { console.log('Error on transaction write', err); }
       }
     }
   }
