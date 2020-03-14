@@ -11,19 +11,101 @@ function init(dbConfig) {
     const key = dbConfig.KeySchema.find(item => item.KeyType=='RANGE')
     return key ? key.AttributeName : null
   }
-  function queryParams(record, projection) {
-    return getTableQuery(record[PK], null, projection)
-  }
-  function getTableQuery(pkvalue, skvalue, projection) {
+
+  function queryParams(record, projection) { return getQueryParams().beginsWith(record[PK], null).project(projection).get() }
+  function tableEQSearch(pkvalue, skvalue, projection) { return getQueryParams().eq(pkvalue, skvalue).project(projection).get() }
+  function tableBWSearch(pkvalue, skvalue, projection) { return getQueryParams().beginsWith(pkvalue, skvalue).project(projection).get() }
+  function tableCOSearch(pkvalue, skvalue, projection) { return getQueryParams().contains(pkvalue, skvalue).project(projection).get() }
+  function getQueryParams() {
+    const pkPlaceholder = `#${PK}`
+    const skPlaceholder = `#${SK}`
     let config = {
       TableName: dbConfig.TableName,
-      KeyConditionExpression: skvalue ? '#pk = :pk AND begins_with(#sk, :sk)' : '#pk = :pk',
-      ExpressionAttributeNames: skvalue ? {'#pk': PK, '#sk': SK} : {'#pk': PK},
-      ExpressionAttributeValues: skvalue ? {':pk': pkvalue, ':sk': skvalue} : {':pk': pkvalue}
+      ExpressionAttributeNames: {}
     }
-    if (projection) config.ProjectionExpression = projection
-    return config
+    config.ExpressionAttributeNames[pkPlaceholder] = PK
+    function get() { return config }
+    function addAttributeName(name, value) {
+      const key = '#' + name
+      config.ExpressionAttributeNames[key] = name
+      if (value) {
+        const valueKey = ':' + name
+        config.ExpressionAttributeValues[valueKey] = value
+      }
+      return this
+    }
+    function eq(pkvalue, skvalue) {
+      if (skvalue) {
+        config.KeyConditionExpression = `${pkPlaceholder} = :pk AND ${skPlaceholder} = :sk`
+        config.ExpressionAttributeNames[skPlaceholder] = SK
+        config.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
+      } else {
+        config.KeyConditionExpression = `${pkPlaceholder} = :pk`
+        config.ExpressionAttributeValues = { ':pk': pkvalue }
+      }
+      return this
+    }
+    function beginsWith(pkvalue, skvalue) {
+      if (skvalue) {
+        config.KeyConditionExpression = `${pkPlaceholder} = :pk AND begins_with(${skPlaceholder}, :sk)`
+        config.ExpressionAttributeNames[skPlaceholder] = SK
+        config.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
+      } else {
+        config.KeyConditionExpression = `${pkPlaceholder} = :pk`
+        config.ExpressionAttributeValues = { ':pk': pkvalue }
+      }
+      return this
+    }
+    function contains(pkvalue, skvalue) {
+      if (skvalue) {
+        config.KeyConditionExpression = `${pkPlaceholder} = :pk AND contains(${skPlaceholder}, :sk)`
+        config.ExpressionAttributeNames[skPlaceholder] = SK
+        config.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
+      } else {
+        config.KeyConditionExpression = `${pkPlaceholder} = :pk`
+        config.ExpressionAttributeValues = { ':pk': pkvalue }
+      }
+      return this
+    }
+    function filter(expr, name, value) {
+      config.FilterExpression = expr // '#status = :stat'
+      return addAttributeName(name, value)
+    }
+    function project(projection) {
+      if (projection) config.ProjectionExpression = projection
+      return this
+    }
+    function toString() {
+      return `Table ${dbConfig.TableName} contains key ${PK}, ${SK}`
+    }
+    // Provide a plain language description of the query parameter object
+    function explain() {
+      const kce = Object.keys(config.ExpressionAttributeNames).reduce((orig, curr) => {
+        return orig.replace(curr, config.ExpressionAttributeNames[curr])
+      }, config.KeyConditionExpression)
+      let criteria = Object.keys(config.ExpressionAttributeValues).reduce((orig, curr) => { return orig.replace(curr, `'${config.ExpressionAttributeValues[curr]}'`) }, kce)
+      let description = `Search ${config.TableName}.${config.IndexName} WHERE ${criteria}`
+      if (config.FilterExpression) {
+        const filter = Object.keys(config.ExpressionAttributeNames).reduce((orig, curr) => { return orig.replace(curr, `'${config.ExpressionAttributeNames[curr]}'`) }, config.FilterExpression)
+        criteria = Object.keys(config.ExpressionAttributeValues).reduce((orig, curr) => { return orig.replace(curr, `'${config.ExpressionAttributeValues[curr]}'`) }, filter)
+        description += ` FILTER ON ${criteria}`
+      }
+      if (config.ProjectionExpression) description += ` SHOWING ONLY ${config.ProjectionExpression}`
+      return description
+    }
+    return {
+      addAttributeName: addAttributeName,
+      eq: eq,
+      beginsWith: beginsWith,
+      contains: contains,
+      filter: filter,
+      project: project,
+      get: get,
+      toString: toString,
+      explain: explain
+    }
   }
+
   function getDeleteParams(record) {
     const pk = getTablePK() || 'pk'
     const sk = getTableSK() || 'sk'
@@ -35,6 +117,7 @@ function init(dbConfig) {
     config.Key[sk] = record[sk]
     return config
   }
+
   // A convenience function for getInsertParams
   function insertParams(record) { return getInsertParams(record).get() }
   function getInsertParams(record) {
@@ -97,12 +180,12 @@ function init(dbConfig) {
       get: get
     }
   }
-
   function getBatchWriteParams(records) {
     const config = { RequestItems: {}}
     config.RequestItems[dbConfig.TableName] = records.map(obj => { return {PutRequest: {Item: obj}}; } )
     return config
   }
+
   function getUpdateQuery(pkvalue, skvalue) {
     const pk = getTablePK() || 'pk'
     const sk = getTableSK() || 'sk'
@@ -140,6 +223,7 @@ function init(dbConfig) {
       get: get
     }
   }
+
   function getLocalIndexQuery(indexName) {
     if (!dbConfig.LocalSecondaryIndexes) return null
     const locIdx = dbConfig.LocalSecondaryIndexes.find(item => item.IndexName===indexName)
@@ -288,8 +372,11 @@ function init(dbConfig) {
   return {
     getLocalIndexQuery: getLocalIndexQuery,
     getGlobalIndexQuery: getGlobalIndexQuery,
-    getTableQuery: getTableQuery,
+    tableEQSearch: tableEQSearch,
+    tableBWSearch: tableBWSearch,
+    tableCOSearch: tableCOSearch,
     queryParams: queryParams,
+    getQueryParams: getQueryParams,
     getUpdateQuery: getUpdateQuery,
     getBatchWriteParams: getBatchWriteParams,
     getTransactParams: getTransactParams,

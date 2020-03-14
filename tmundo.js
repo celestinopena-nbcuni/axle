@@ -54,8 +54,8 @@ function hitDB(cmd = 'Q') {
         }
       } else if (cmd==='L') {
         const datafile = util.arg(2)
-        // if (datafile) loadTable(datafile, util.arg(3))
-        if (datafile) loadCWTable(datafile)
+        if (datafile) loadTable(datafile, util.arg(3))
+        // if (datafile) loadCWTable(datafile)
       } else if (cmd==='R') {
         const datafile = util.arg(2)
         if (datafile) readTelemundoDatafile(datafile)
