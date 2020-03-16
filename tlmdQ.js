@@ -5,7 +5,6 @@ const AWS = require('aws-sdk'),
   dbClient = require('./dbClient').init('us-east-1', 'http://localhost:8000'),
   util = require('./general')
 
-const transformer = require('./datatransformer').init(dbConfigs.tlmdCW)
 const cwQuery = dbQuery.init(dbConfigs.tlmdCW)
 const indexes = {
   'Q1': cwQuery.getLocalIndexQuery('Itemtype'),
@@ -29,12 +28,12 @@ async function init(cmd) {
   console.log('tlmdQ >>', new Date().toLocaleString());
   const pk=util.arg(2)
   const sk=util.arg(3)
+  const op=util.arg(4)
   try {
     const tableExists = await dbClient.hasTable(dbConfigs.tlmdCW.TableName)
     if (tableExists) {
       if (cmd==='Q') {
-        // const shortView = util.arg(4); const cols = '#pk, datePublished, itemType, title, slug'
-        queryTable(pk, sk)
+        queryTable(pk, sk, op?op.toUpperCase():null)
       }
       else if (cmd==='Q1') {
         let idx = indexes.Q1.$eq(pk, sk).$project('#uuid, programUuid, itemType, title, statusDate, slug').$addAttribute('uuid')
@@ -61,19 +60,29 @@ async function init(cmd) {
   }
 }
 
-async function queryTable(pkvalue, skvalue, projection) {
+async function queryTable(pkvalue, skvalue, comparison = 'B') {
   if (!pkvalue) { console.log('Please provide PK value'); return; }
   const sortKeyDisplay = (skvalue || 'No sort key value provided')
-  const qparams=cwQuery.tableBWSearch(pkvalue, skvalue)
-  console.log('QUERY table:', qparams);
+  const query = getQuery(pkvalue, skvalue, comparison)
+  const qparams = query.get()
+  const descrip =  query.explain()
   try {
     const data = await dbClient.query(qparams)
-    if (data.Items) console.log('Objects found:', data.Items.length);
-    else console.log('NO item by PK', pkvalue, sortKeyDisplay);
+    if (data.Items && data.Items.length>0) {
+      console.log(`"${descrip}" -> succeeded: ${data.Items.length} objects. Params=`, qparams);
+      console.log(util.shortView(data.Items, ['pk', 'sk', 'itemType', 'data']));
+    }
+    else console.log(`${descrip} found NO objects. Params=`, qparams);
   }
   catch (err) {
     console.log('Error getting item by key', pkvalue, sortKeyDisplay, util.obj2str(err));
   }
+}
+
+function getQuery(pkvalue, skvalue, comparison) {
+  if (comparison==='E') return cwQuery.getQueryParams().eq(pkvalue, skvalue)
+  else if (comparison==='C') return cwQuery.getQueryParams().contains(pkvalue, skvalue)
+  else return cwQuery.getQueryParams().beginsWith(pkvalue, skvalue)
 }
 
 function queryIndex(queryParams) {

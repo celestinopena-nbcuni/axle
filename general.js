@@ -41,6 +41,10 @@ function propstr(sourceObj, propList) {
   }, []).join(', ')
 }
 
+function shortView(collection, propList) {
+  return collection.map(item => propstr(item, propList))
+}
+
 function convertUnixDate(unixdate, format = 'ISO', factor = 1) {
   let dt = null;
   if (format.toUpperCase()==='LOCALE') dt = new Date(unixdate * factor).toLocaleString()
@@ -94,6 +98,7 @@ module.exports = {
   obj2str: obj2str,
   arg: arg,
   propstr: propstr,
+  shortView: shortView,
   convertUnixDate: convertUnixDate,
   copyFields: copyFields,
   noblanks: noblanks,

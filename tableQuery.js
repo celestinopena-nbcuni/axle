@@ -16,6 +16,7 @@ function init(dbConfig) {
   function tableEQSearch(pkvalue, skvalue, projection) { return getQueryParams().eq(pkvalue, skvalue).project(projection).get() }
   function tableBWSearch(pkvalue, skvalue, projection) { return getQueryParams().beginsWith(pkvalue, skvalue).project(projection).get() }
   function tableCOSearch(pkvalue, skvalue, projection) { return getQueryParams().contains(pkvalue, skvalue).project(projection).get() }
+  // getQueryParams creates an object that allows table searches
   function getQueryParams() {
     const pkPlaceholder = `#${PK}`
     const skPlaceholder = `#${SK}`
@@ -84,7 +85,7 @@ function init(dbConfig) {
         return orig.replace(curr, config.ExpressionAttributeNames[curr])
       }, config.KeyConditionExpression)
       let criteria = Object.keys(config.ExpressionAttributeValues).reduce((orig, curr) => { return orig.replace(curr, `'${config.ExpressionAttributeValues[curr]}'`) }, kce)
-      let description = `Search ${config.TableName}.${config.IndexName} WHERE ${criteria}`
+      let description = `Search ${config.TableName} WHERE ${criteria}`
       if (config.FilterExpression) {
         const filter = Object.keys(config.ExpressionAttributeNames).reduce((orig, curr) => { return orig.replace(curr, `'${config.ExpressionAttributeNames[curr]}'`) }, config.FilterExpression)
         criteria = Object.keys(config.ExpressionAttributeValues).reduce((orig, curr) => { return orig.replace(curr, `'${config.ExpressionAttributeValues[curr]}'`) }, filter)
@@ -224,6 +225,7 @@ function init(dbConfig) {
     }
   }
 
+  // getLocalIndexQuery creates an object that allows searches by a LSI
   function getLocalIndexQuery(indexName) {
     if (!dbConfig.LocalSecondaryIndexes) return null
     const locIdx = dbConfig.LocalSecondaryIndexes.find(item => item.IndexName===indexName)
@@ -231,6 +233,7 @@ function init(dbConfig) {
     return configureIndex(locIdx)
   }
 
+  // getGlobalIndexQuery creates an object that allows searches by a GSI
   function getGlobalIndexQuery(indexName) {
     if (!dbConfig.GlobalSecondaryIndexes) return null
     const gsi = dbConfig.GlobalSecondaryIndexes.find(item => item.IndexName===indexName)
