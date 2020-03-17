@@ -25,6 +25,15 @@ function init(region, endpoint) {
     catch (err) { return err }
   }
 
+  async function querydb(params) {
+    const dynamodb = new AWS.DynamoDB();
+    try {
+      const data = await dynamodb.query(params).promise()
+      return data
+    }
+    catch (err) { return err }
+  }
+
   async function insert(params) {
     try { await docClient.put(params).promise() }
     catch (err) { return err }
@@ -84,6 +93,7 @@ function init(region, endpoint) {
 
   return {
     query: query,
+    querydb: querydb,
     insert: insert,
     update: update,
     transaction: transaction,

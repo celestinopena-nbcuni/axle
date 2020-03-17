@@ -13,9 +13,6 @@ function init(dbConfig) {
   }
 
   function queryParams(record, projection) { return getQueryParams().beginsWith(record[PK], null).project(projection).get() }
-  function tableEQSearch(pkvalue, skvalue, projection) { return getQueryParams().eq(pkvalue, skvalue).project(projection).get() }
-  function tableBWSearch(pkvalue, skvalue, projection) { return getQueryParams().beginsWith(pkvalue, skvalue).project(projection).get() }
-  function tableCOSearch(pkvalue, skvalue, projection) { return getQueryParams().contains(pkvalue, skvalue).project(projection).get() }
   // getQueryParams creates an object that allows table searches
   function getQueryParams() {
     const pkPlaceholder = `#${PK}`
@@ -250,8 +247,8 @@ function init(dbConfig) {
     const pk = hkey ? hkey.AttributeName : null
     const sk = skey ? skey.AttributeName : null
     if (!pk) return null
-    const pkPlaceholder = `#${pk}`
-    const skPlaceholder = `#${sk}`
+    const pkPlaceholder = `#${pk.replace('-', '').toLowerCase()}`
+    const skPlaceholder = `#${sk.replace('-', '').toLowerCase()}`
     let config = {
       TableName: dbConfig.TableName,
       IndexName: index.IndexName,
@@ -347,9 +344,6 @@ function init(dbConfig) {
   return {
     getLocalIndexQuery: getLocalIndexQuery,
     getGlobalIndexQuery: getGlobalIndexQuery,
-    tableEQSearch: tableEQSearch,
-    tableBWSearch: tableBWSearch,
-    tableCOSearch: tableCOSearch,
     queryParams: queryParams,
     getQueryParams: getQueryParams,
     getUpdateQuery: getUpdateQuery,

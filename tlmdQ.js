@@ -36,7 +36,8 @@ async function init(cmd) {
       else if (cmd==='Q1') { queryTable(pk, sk, op, indexes.Q1) }
       else if (cmd==='Q2') { queryTable(pk, sk, op, indexes.Q2) }
       else if (cmd==='X') {
-        console.log('Query translated:', indexes.Q1.eq(pk, null).project('pk, sk, GSI1-PK, GSI1-SK').filter('begins_with(#gsi1SK, :gsi1SK)', 'gsi1SK', sk).get())
+        // console.log('Query translated:', indexes.Q1.eq(pk, null).project('pk, sk, GSI1-PK, GSI1-SK').filter('begins_with(#gsi1SK, :gsi1SK)', 'gsi1SK', sk).get())
+        debugQuery(pk, sk)
       }
       else console.log('Unrecognized option:', cmd);
     } else {
@@ -80,5 +81,60 @@ function getQuery(pkvalue, skvalue, comparison, secIndex) {
     else if (op==='B') return maintable.beginsWith(pkvalue, skvalue)
     else if (op==='C') return maintable.contains(pkvalue, skvalue)
     else return maintable.eq(pkvalue, skvalue)
+  }
+}
+
+async function debugQuery(pkvalue, op = 1) {
+  const Gsi = {
+    TableName: 'TlmdCW',
+    IndexName: 'GSI1',
+    KeyConditionExpression: '#gsiPK = :gsiPK',
+    ExpressionAttributeNames: { '#gsiPK': 'GSI1-PK' },
+    ExpressionAttributeValues: { ':gsiPK': pkvalue }
+  };
+  const Lsi = {
+    TableName: 'TlmdCW',
+    IndexName: 'Itemtype',
+    KeyConditionExpression: '#pk = :pk',
+    ExpressionAttributeNames: {
+      '#pk': 'pk'
+    },
+    ExpressionAttributeValues: {
+      ':pk': pkvalue
+    }
+  };
+  const Gsi2 = {
+    "TableName": "TlmdCW",
+    "ScanIndexForward": false,
+    "IndexName": "GSI1",
+    "KeyConditionExpression": "#e88b0 = :e88b0",
+    "ExpressionAttributeValues": {
+      ":e88b0": { "S": pkvalue }
+    },
+    "ExpressionAttributeNames": { "#e88b0": "GSI1-PK" }
+  };
+  const Gsi3 = {
+    TableName: 'TlmdCW',
+    IndexName: 'GSI1',
+    KeyConditionExpression: '#gsiPK = :gsiPK',
+    ExpressionAttributeNames: { '#gsiPK': 'GSI1-PK' },
+    ExpressionAttributeValues: {
+      ':gsiPK': { 'S': pkvalue}
+    }
+  };
+  let qparams = Gsi;
+  if (op==2) qparams = Gsi2;
+  else if (op==3) qparams = Lsi;
+  else if (op==4) qparams = Gsi3;
+  try {
+    const data = await dbClient.querydb(qparams)
+    if (data.Items && data.Items.length>0) {
+      console.log(`Index query succeeded: ${data.Items.length} objects. Params=`, qparams);
+      console.log(util.shortView(data.Items, ['pk', 'sk', 'itemType', 'data']));
+    }
+    else console.log(`Index query found NO objects. Params=`, qparams);
+  }
+  catch (err) {
+    console.log('Error getting item by key', pkvalue, util.obj2str(err));
   }
 }
