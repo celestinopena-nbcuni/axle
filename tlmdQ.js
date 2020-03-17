@@ -6,6 +6,7 @@ const AWS = require('aws-sdk'),
   util = require('./general')
 
 const cwQuery = dbQuery.init(dbConfigs.tlmdCW)
+const maintable = cwQuery.getQueryParams()
 const indexes = {
   'Q1': cwQuery.getLocalIndexQuery('Itemtype'),
   'Q2': cwQuery.getGlobalIndexQuery('GSI1')
@@ -16,10 +17,9 @@ if (!cmdlineParams) {
   console.log('tlmdQ - Query the TlmdCW table');
   console.log('usage: node tlmdQ.js options');
   console.log(' Options');
-  console.log('  Q pk sk = query table by PK and SK');
-  console.log('  Q1 pk sk = query GSI 1 index');
-  console.log('  Q2 pk sk = query GSI 2 index');
-  console.log('  Q3 pk sk = query GSI 3 index');
+  console.log('  Q pk sk op = query table by PK and SK using an operator, E,B, or C');
+  console.log('  Q1 pk sk op = query GSI 1 index');
+  console.log('  Q2 pk sk op = query GSI 2 index');
 } else {
   init(cmdlineParams)
 }
@@ -36,15 +36,11 @@ async function init(cmd) {
         queryTable(pk, sk, op?op.toUpperCase():null)
       }
       else if (cmd==='Q1') {
-        let idx = indexes.Q1.$eq(pk, sk).$project('#uuid, programUuid, itemType, title, statusDate, slug').$addAttribute('uuid')
-        // queryTelemundoIndex(idx.get())
-        queryIndex(idx)
+        queryTable(pk, sk, op?op.toUpperCase():null, indexes.Q1)
       }
       else if (cmd==='Q2') {
-        queryIndex(indexes.Q2.$beginsWith(pk, sk).$project('#uuid, programUuid, itemType, title, slug').$addAttribute('uuid'))
-      }
-      else if (cmd==='Q3') {
-        queryIndex(indexes.Q3.$beginsWith(pk, sk).$project('#uuid, programUuid, itemType, title, slug').$addAttribute('uuid'))
+        console.log('Using', indexes.Q2.toString());
+        queryTable(pk, sk, op?op.toUpperCase():null, indexes.Q2)
       }
       else if (cmd==='X') {
         let qparams = indexes.Q1.$eq(pk, null).$project('title, datePublished, itemType, slug, frontends').$filter('contains(#frontends, :frontends)', 'frontends', sk)
@@ -60,10 +56,10 @@ async function init(cmd) {
   }
 }
 
-async function queryTable(pkvalue, skvalue, comparison = 'B') {
+async function queryTable(pkvalue, skvalue, comparison = 'E', secIndex) {
   if (!pkvalue) { console.log('Please provide PK value'); return; }
   const sortKeyDisplay = (skvalue || 'No sort key value provided')
-  const query = getQuery(pkvalue, skvalue, comparison)
+  const query = getQuery(pkvalue, skvalue, comparison, secIndex)
   const qparams = query.get()
   const descrip =  query.explain()
   try {
@@ -79,22 +75,16 @@ async function queryTable(pkvalue, skvalue, comparison = 'B') {
   }
 }
 
-function getQuery(pkvalue, skvalue, comparison) {
-  if (comparison==='E') return cwQuery.getQueryParams().eq(pkvalue, skvalue)
-  else if (comparison==='C') return cwQuery.getQueryParams().contains(pkvalue, skvalue)
-  else return cwQuery.getQueryParams().beginsWith(pkvalue, skvalue)
-}
-
-function queryIndex(queryParams) {
-  let paramObj = null
-  if (queryParams.get) paramObj = queryParams.get()
-  else paramObj = queryParams
-  const docClient = new AWS.DynamoDB.DocumentClient();
-  docClient.query(paramObj, function (err, data) {
-    console.log(queryParams.toString(), JSON.stringify(paramObj,null,2));
-    if (queryParams.explain) console.log(queryParams.explain());
-    if (err) console.log('Error getting item by key', util.obj2str(err));
-    else if (data.Items) console.log(`Got items by key (${data.Items.length})`, data.Items);
-    else console.log('NO item found by this index');
-  })
+function getQuery(pkvalue, skvalue, comparison, secIndex) {
+  if (secIndex) {
+    if (comparison==='E') return secIndex.eq(pkvalue, skvalue)
+    else if (comparison==='B') return secIndex.beginsWith(pkvalue, skvalue)
+    else if (comparison==='C') return secIndex.contains(pkvalue, skvalue)
+    else return secIndex.eq(pkvalue, skvalue)
+  } else {
+    if (comparison==='E') return maintable.eq(pkvalue, skvalue)
+    else if (comparison==='B') return maintable.beginsWith(pkvalue, skvalue)
+    else if (comparison==='C') return maintable.contains(pkvalue, skvalue)
+    else return maintable.eq(pkvalue, skvalue)
+  }
 }

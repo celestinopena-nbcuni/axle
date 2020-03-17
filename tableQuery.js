@@ -20,11 +20,7 @@ function init(dbConfig) {
   function getQueryParams() {
     const pkPlaceholder = `#${PK}`
     const skPlaceholder = `#${SK}`
-    let config = {
-      TableName: dbConfig.TableName,
-      ExpressionAttributeNames: {}
-    }
-    config.ExpressionAttributeNames[pkPlaceholder] = PK
+    let config = { TableName: dbConfig.TableName }
     function get() { return config }
     function addAttributeName(name, value) {
       const key = '#' + name
@@ -36,6 +32,8 @@ function init(dbConfig) {
       return this
     }
     function eq(pkvalue, skvalue) {
+      config.ExpressionAttributeNames = {}
+      config.ExpressionAttributeNames[pkPlaceholder] = PK
       if (skvalue) {
         config.KeyConditionExpression = `${pkPlaceholder} = :pk AND ${skPlaceholder} = :sk`
         config.ExpressionAttributeNames[skPlaceholder] = SK
@@ -47,6 +45,8 @@ function init(dbConfig) {
       return this
     }
     function beginsWith(pkvalue, skvalue) {
+      config.ExpressionAttributeNames = {}
+      config.ExpressionAttributeNames[pkPlaceholder] = PK
       if (skvalue) {
         config.KeyConditionExpression = `${pkPlaceholder} = :pk AND begins_with(${skPlaceholder}, :sk)`
         config.ExpressionAttributeNames[skPlaceholder] = SK
@@ -58,6 +58,8 @@ function init(dbConfig) {
       return this
     }
     function contains(pkvalue, skvalue) {
+      config.ExpressionAttributeNames = {}
+      config.ExpressionAttributeNames[pkPlaceholder] = PK
       if (skvalue) {
         config.KeyConditionExpression = `${pkPlaceholder} = :pk AND contains(${skPlaceholder}, :sk)`
         config.ExpressionAttributeNames[skPlaceholder] = SK
@@ -95,7 +97,7 @@ function init(dbConfig) {
       return description
     }
     return {
-      addAttributeName: addAttributeName,
+      addAttribute: addAttributeName,
       eq: eq,
       beginsWith: beginsWith,
       contains: contains,
@@ -254,6 +256,7 @@ function init(dbConfig) {
       IndexName: index.IndexName,
       ExpressionAttributeNames: {}
     }
+    config.ExpressionAttributeNames[pkPlaceholder] = pk
     function get() { return config }
     function addAttributeName(name, value) {
       const key = '#' + name
@@ -262,80 +265,47 @@ function init(dbConfig) {
         const valueKey = ':' + name
         config.ExpressionAttributeValues[valueKey] = value
       }
+      return this
     }
     function eq(pkvalue, skvalue) {
-      let params = {
-        TableName: dbConfig.TableName,
-        IndexName: index.IndexName,
-        ExpressionAttributeNames: {}
-      }
-      params.ExpressionAttributeNames[pkPlaceholder] = pk
       if (skvalue) {
-        params.ExpressionAttributeNames[skPlaceholder] = sk
-        params.KeyConditionExpression = `${pkPlaceholder} = :pk AND ${skPlaceholder} = :sk`
-        params.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
+        config.ExpressionAttributeNames[skPlaceholder] = sk
+        config.KeyConditionExpression = `${pkPlaceholder} = :pk AND ${skPlaceholder} = :sk`
+        config.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
       } else {
-        params.KeyConditionExpression = `${pkPlaceholder} = :pk`
-        params.ExpressionAttributeValues = { ':pk': pkvalue }
+        config.KeyConditionExpression = `${pkPlaceholder} = :pk`
+        config.ExpressionAttributeValues = { ':pk': pkvalue }
       }
-      return params
+      return this
     }
     function beginsWith(pkvalue, skvalue) {
-      let params = {
-        TableName: dbConfig.TableName,
-        IndexName: index.IndexName,
-        ExpressionAttributeNames: {}
-      }
-      params.ExpressionAttributeNames[pkPlaceholder] = pk
       if (skvalue) {
-        params.ExpressionAttributeNames[skPlaceholder] = sk
-        params.KeyConditionExpression = `${pkPlaceholder} = :pk AND begins_with(${skPlaceholder}, :sk)`
-        params.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
+        config.ExpressionAttributeNames[skPlaceholder] = sk
+        config.KeyConditionExpression = `${pkPlaceholder} = :pk AND begins_with(${skPlaceholder}, :sk)`
+        config.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
       } else {
-        params.KeyConditionExpression = `${pkPlaceholder} = :pk`
-        params.ExpressionAttributeValues = { ':pk': pkvalue }
+        config.KeyConditionExpression = `${pkPlaceholder} = :pk`
+        config.ExpressionAttributeValues = { ':pk': pkvalue }
       }
-      return params
+      return this
     }
     function contains(pkvalue, skvalue) {
-      let params = {
-        TableName: dbConfig.TableName,
-        IndexName: index.IndexName,
-        ExpressionAttributeNames: {}
-      }
-      params.ExpressionAttributeNames[pkPlaceholder] = pk
+      config.ExpressionAttributeNames[pkPlaceholder] = pk
       if (skvalue) {
-        params.ExpressionAttributeNames[skPlaceholder] = sk
-        params.KeyConditionExpression = `${pkPlaceholder} = :pk AND contains(${skPlaceholder}, :sk)`
-        params.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
+        config.ExpressionAttributeNames[skPlaceholder] = sk
+        config.KeyConditionExpression = `${pkPlaceholder} = :pk AND contains(${skPlaceholder}, :sk)`
+        config.ExpressionAttributeValues = { ':pk': pkvalue, ':sk': skvalue }
       } else {
-        params.KeyConditionExpression = `${pkPlaceholder} = :pk`
-        params.ExpressionAttributeValues = { ':pk': pkvalue }
+        config.KeyConditionExpression = `${pkPlaceholder} = :pk`
+        config.ExpressionAttributeValues = { ':pk': pkvalue }
       }
-      return params
-    }
-    function eqChain(pkvalue, skvalue) {
-      config = eq(pkvalue, skvalue)
       return this
     }
-    function beginsWithChain(pkvalue, skvalue) {
-      config = beginsWith(pkvalue, skvalue)
-      return this
-    }
-    function containsChain(pkvalue, skvalue) {
-      config = contains(pkvalue, skvalue)
-      return this
-    }
-    function addAttributeNameChain(name, value) {
-      addAttributeName(name, value)
-      return this
-    }
-    function filterChain(expr, name, value) {
+    function filter(expr, name, value) {
       config.FilterExpression = expr // '#status = :stat'
-      addAttributeName(name, value)
-      return this
+      return addAttributeName(name, value)
     }
-    function projectChain(projection) {
+    function project(projection) {
       if (projection) config.ProjectionExpression = projection
       return this
     }
@@ -361,12 +331,9 @@ function init(dbConfig) {
       eq: eq,
       beginsWith: beginsWith,
       contains: contains,
-      $eq: eqChain,
-      $beginsWith: beginsWithChain,
-      $contains: containsChain,
-      $filter: filterChain,
-      $project: projectChain,
-      $addAttribute: addAttributeNameChain,
+      filter: filter,
+      project: project,
+      addAttribute: addAttributeName,
       get: get,
       toString: toString,
       explain: explain
