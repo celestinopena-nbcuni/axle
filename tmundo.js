@@ -77,24 +77,24 @@ function hitDB(cmd = 'Q') {
         const pk=util.arg(2) // 'fad8df82-55eb-4452-89e5-c546874a7212'
         const sk=util.arg(3)
         const shortView=util.arg(4)
-        let idx = indexes.Q1.$eq(pk, sk).$project('#uuid, programUuid, itemType, title, statusDate, slug').$addAttribute('uuid')
+        let idx = indexes.Q1.eq(pk, sk).project('#uuid, programUuid, itemType, title, statusDate, slug').addAttribute('uuid')
         // queryTelemundoIndex(idx.get())
         queryIndex(idx)
       }
       else if (cmd==='Q2') {
         const pk=util.arg(2)
         const sk=util.arg(3)
-        queryIndex(indexes.Q2.$beginsWith(pk, sk).$project('#uuid, programUuid, itemType, title, slug').$addAttribute('uuid'))
+        queryIndex(indexes.Q2.beginsWith(pk, sk).project('#uuid, programUuid, itemType, title, slug').addAttribute('uuid'))
       }
       else if (cmd==='Q3') {
         const pk=util.arg(2)
         const sk=util.arg(3)
-        queryIndex(indexes.Q3.$beginsWith(pk, sk).$project('#uuid, programUuid, itemType, title, slug').$addAttribute('uuid'))
+        queryIndex(indexes.Q3.beginsWith(pk, sk).project('#uuid, programUuid, itemType, title, slug').addAttribute('uuid'))
       }
       else if (cmd==='X') {
         const pk=util.arg(2)
         const sk=util.arg(3)
-        let qparams = indexes.Q1.$eq(pk, null).$project('title, datePublished, itemType, slug, frontends').$filter('contains(#frontends, :frontends)', 'frontends', sk)
+        let qparams = indexes.Q1.eq(pk, null).project('title, datePublished, itemType, slug, frontends').filter('contains(#frontends, :frontends)', 'frontends', sk)
         // queryTelemundoIndex(qparams.get())
         console.log('Query translated:', qparams.get(), qparams.explain());
       }
