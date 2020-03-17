@@ -72,7 +72,8 @@ function init(dbConfig) {
     }
     function filter(expr, name, value) {
       config.FilterExpression = expr // '#status = :stat'
-      return addAttributeName(name, value)
+      addAttributeName(name, value)
+      return this
     }
     function project(projection) {
       if (projection) config.ProjectionExpression = projection
@@ -303,7 +304,8 @@ function init(dbConfig) {
     }
     function filter(expr, name, value) {
       config.FilterExpression = expr // '#status = :stat'
-      return addAttributeName(name, value)
+      addAttributeName(name, value)
+      return this
     }
     function project(projection) {
       if (projection) config.ProjectionExpression = projection
@@ -314,14 +316,17 @@ function init(dbConfig) {
     }
     // Provide a plain language description of the query parameter object
     function explain() {
-      const kce = Object.keys(config.ExpressionAttributeNames).reduce((orig, curr) => {
+      const exprAttributeNames = Object.keys(config.ExpressionAttributeNames)
+      if (!(exprAttributeNames && config.ExpressionAttributeValues)) return 'No key values have been set'
+      const exprAttributeValues = Object.keys(config.ExpressionAttributeValues)
+      const kce = exprAttributeNames.reduce((orig, curr) => {
         return orig.replace(curr, config.ExpressionAttributeNames[curr])
       }, config.KeyConditionExpression)
-      let criteria = Object.keys(config.ExpressionAttributeValues).reduce((orig, curr) => { return orig.replace(curr, `'${config.ExpressionAttributeValues[curr]}'`) }, kce)
+      let criteria = exprAttributeValues.reduce((orig, curr) => { return orig.replace(curr, `'${config.ExpressionAttributeValues[curr]}'`) }, kce)
       let description = `Search ${config.TableName}.${config.IndexName} WHERE ${criteria}`
       if (config.FilterExpression) {
-        const filter = Object.keys(config.ExpressionAttributeNames).reduce((orig, curr) => { return orig.replace(curr, `'${config.ExpressionAttributeNames[curr]}'`) }, config.FilterExpression)
-        criteria = Object.keys(config.ExpressionAttributeValues).reduce((orig, curr) => { return orig.replace(curr, `'${config.ExpressionAttributeValues[curr]}'`) }, filter)
+        const filter = exprAttributeNames.reduce((orig, curr) => { return orig.replace(curr, `'${config.ExpressionAttributeNames[curr]}'`) }, config.FilterExpression)
+        criteria = exprAttributeValues.reduce((orig, curr) => { return orig.replace(curr, `'${config.ExpressionAttributeValues[curr]}'`) }, filter)
         description += ` FILTER ON ${criteria}`
       }
       if (config.ProjectionExpression) description += ` SHOWING ONLY ${config.ProjectionExpression}`

@@ -32,19 +32,11 @@ async function init(cmd) {
   try {
     const tableExists = await dbClient.hasTable(dbConfigs.tlmdCW.TableName)
     if (tableExists) {
-      if (cmd==='Q') {
-        queryTable(pk, sk, op?op.toUpperCase():null)
-      }
-      else if (cmd==='Q1') {
-        queryTable(pk, sk, op?op.toUpperCase():null, indexes.Q1)
-      }
-      else if (cmd==='Q2') {
-        console.log('Using', indexes.Q2.toString());
-        queryTable(pk, sk, op?op.toUpperCase():null, indexes.Q2)
-      }
+      if (cmd==='Q') { queryTable(pk, sk, op) }
+      else if (cmd==='Q1') { queryTable(pk, sk, op, indexes.Q1) }
+      else if (cmd==='Q2') { queryTable(pk, sk, op, indexes.Q2) }
       else if (cmd==='X') {
-        let qparams = indexes.Q1.$eq(pk, null).$project('title, datePublished, itemType, slug, frontends').$filter('contains(#frontends, :frontends)', 'frontends', sk)
-        console.log('Query translated:', qparams.get(), qparams.explain());
+        console.log('Query translated:', indexes.Q1.eq(pk, null).project('pk, sk, GSI1-PK, GSI1-SK').filter('begins_with(#gsi1SK, :gsi1SK)', 'gsi1SK', sk).get())
       }
       else console.log('Unrecognized option:', cmd);
     } else {
@@ -52,7 +44,7 @@ async function init(cmd) {
       console.log(`Table ${dbConfigs.tlmdCW.TableName} created:`, stats);
     }
   } catch (err) {
-    console.log('Unable to query table');
+    console.log('Unable to query table:', err);
   }
 }
 
@@ -62,6 +54,7 @@ async function queryTable(pkvalue, skvalue, comparison = 'E', secIndex) {
   const query = getQuery(pkvalue, skvalue, comparison, secIndex)
   const qparams = query.get()
   const descrip =  query.explain()
+  if (secIndex) console.log('Using', secIndex.toString());
   try {
     const data = await dbClient.query(qparams)
     if (data.Items && data.Items.length>0) {
@@ -76,15 +69,16 @@ async function queryTable(pkvalue, skvalue, comparison = 'E', secIndex) {
 }
 
 function getQuery(pkvalue, skvalue, comparison, secIndex) {
+  const op = comparison.toUpperCase()
   if (secIndex) {
-    if (comparison==='E') return secIndex.eq(pkvalue, skvalue)
-    else if (comparison==='B') return secIndex.beginsWith(pkvalue, skvalue)
-    else if (comparison==='C') return secIndex.contains(pkvalue, skvalue)
+    if (op==='E') return secIndex.eq(pkvalue, skvalue)
+    else if (op==='B') return secIndex.beginsWith(pkvalue, skvalue)
+    else if (op==='C') return secIndex.contains(pkvalue, skvalue)
     else return secIndex.eq(pkvalue, skvalue)
   } else {
-    if (comparison==='E') return maintable.eq(pkvalue, skvalue)
-    else if (comparison==='B') return maintable.beginsWith(pkvalue, skvalue)
-    else if (comparison==='C') return maintable.contains(pkvalue, skvalue)
+    if (op==='E') return maintable.eq(pkvalue, skvalue)
+    else if (op==='B') return maintable.beginsWith(pkvalue, skvalue)
+    else if (op==='C') return maintable.contains(pkvalue, skvalue)
     else return maintable.eq(pkvalue, skvalue)
   }
 }
