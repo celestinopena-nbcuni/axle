@@ -6,10 +6,6 @@ const AWS = require('aws-sdk'),
 
 const transformer = require('./datatransformer').init(dbConfigs.tlmdCW)
 const cwQuery = dbQuery.init(dbConfigs.tlmdCW)
-const indexes = {
-  'Q1': cwQuery.getLocalIndexQuery('Itemtype'),
-  'Q2': cwQuery.getGlobalIndexQuery('GSI1')
-}
 
 const datafile = util.arg(1)
 if (!datafile) console.log('Usage: node tlmdcw-api.js jsonfile');

@@ -25,6 +25,7 @@ function init(region, endpoint) {
     catch (err) { return err }
   }
 
+  // Like query() but does not use DocumentClient
   async function querydb(params) {
     const dynamodb = new AWS.DynamoDB();
     try {
@@ -74,6 +75,15 @@ function init(region, endpoint) {
     catch (err) { return err }
   }
 
+  async function deleteTable(tablename) {
+    const dynamodb = new AWS.DynamoDB();
+    try {
+      const data = await dynamodb.deleteTable({TableName: tablename}).promise()
+      return data
+    }
+    catch (err) { return err }
+  }
+
   async function listTables() {
     const dynamodb = new AWS.DynamoDB();
     try {
@@ -101,11 +111,12 @@ function init(region, endpoint) {
     batchInsert: batchUpdate,
     remove: remove,
     createTable: createTable,
+    deleteTable: deleteTable,
     hasTable: hasTable
   }
 }
 
 module.exports = {
   init: init,
-  version: '0.0.2'
+  version: '0.0.3'
 }

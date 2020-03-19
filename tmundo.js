@@ -20,7 +20,6 @@ if (!cmdlineParams) {
   console.log(' Options');
   console.log('  C tablename = create table');
   console.log('  D tablename = delete table');
-  console.log('  Demo = run demo scenario');
   console.log('  I = list indexes on this table');
   console.log('  L filename tablename = load the given json file into a table');
   console.log('  R filename = read the given json file');
@@ -60,7 +59,6 @@ function hitDB(cmd = 'Q') {
         const datafile = util.arg(2)
         if (datafile) readTelemundoDatafile(datafile)
       }
-      else if (cmd==='DEMO') { runDemo(util.arg(2) || 'taxonomy', indexes.Q1) }
       else if (cmd==='I') {
         Object.keys(indexes).forEach(key => {
           console.log(key+' ->', indexes[key].toString());
@@ -390,14 +388,4 @@ function transformAppend(record, index) {
   record.seriesCtypeTitle = `${record.series}#${record.ctype}#${record.title}`.toUpperCase()
   record.seriesCtypeStatus = `${record.series}#${record.ctype}#${record.status}`.toUpperCase()
   return record
-}
-
-function runDemo(searchTerm, gsi) {
-  if (gsi) {
-    getQueryIndex(gsi.eq('none')).then(function(data) {
-      console.log(`Query returned ${data.Items.length} with content type ${searchTerm}`, data.Items.find(item => item.ctype==searchTerm));
-    }, function(error) {
-      console.log('Query failed:', util.obj2str(error));
-    })
-  }
 }
