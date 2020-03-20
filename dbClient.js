@@ -3,6 +3,7 @@ const AWS = require('aws-sdk')
 
 function init(region, endpoint) {
   let docClient = null
+  let dynamodb = null
   AWS.config.getCredentials(function(err) {
     if (err) {
       console.log('Configuration error: Unable to set region and endpoint', err.stack);
@@ -14,6 +15,7 @@ function init(region, endpoint) {
       'endpoint': endpoint
     });
     docClient = new AWS.DynamoDB.DocumentClient();
+    dynamodb = new AWS.DynamoDB();
   })
   // console.log('docClient:', docClient?'Yes':'No');
 
@@ -27,7 +29,6 @@ function init(region, endpoint) {
 
   // Like query() but does not use DocumentClient
   async function querydb(params) {
-    const dynamodb = new AWS.DynamoDB();
     try {
       const data = await dynamodb.query(params).promise()
       return data
@@ -38,6 +39,15 @@ function init(region, endpoint) {
   async function insert(params) {
     try { await docClient.put(params).promise() }
     catch (err) { return err }
+  }
+
+  async function insertRecords(collection) {
+    try {
+      collection.forEach(item => {
+        await docClient.put(item).promise()
+      });
+    }
+    catch (err) { console.log('Unable to insert records', err); }
   }
 
   async function update(params) {
@@ -67,44 +77,30 @@ function init(region, endpoint) {
   }
 
   async function createTable(params) {
-    const dynamodb = new AWS.DynamoDB();
-    try {
-      const data = await dynamodb.createTable(params).promise()
-      return data
-    }
-    catch (err) { return err }
+    const data = await dynamodb.createTable(params).promise()
+    return data
   }
 
   async function deleteTable(tablename) {
-    const dynamodb = new AWS.DynamoDB();
-    try {
-      const data = await dynamodb.deleteTable({TableName: tablename}).promise()
-      return data
-    }
-    catch (err) { return err }
+    const data = await dynamodb.deleteTable({TableName: tablename}).promise()
+    return data
   }
 
   async function listTables() {
-    const dynamodb = new AWS.DynamoDB();
-    try {
-      const data = await dynamodb.listTables({}).promise()
-      return data
-    }
-    catch (err) { return err }
+    const data = await dynamodb.listTables({}).promise()
+    return data
   }
 
   async function hasTable(tableName) {
-    try {
-      const data = await listTables()
-      return data.TableNames.includes(tableName)
-    }
-    catch (err) { return err }
+    const data = await listTables()
+    return data.TableNames.includes(tableName)
   }
 
   return {
     query: query,
     querydb: querydb,
     insert: insert,
+    insertRecords: insertRecords,
     update: update,
     transaction: transaction,
     batchUpdate: batchUpdate,
@@ -112,6 +108,7 @@ function init(region, endpoint) {
     remove: remove,
     createTable: createTable,
     deleteTable: deleteTable,
+    listTables: listTables,
     hasTable: hasTable
   }
 }
