@@ -27,16 +27,16 @@ async function useDb(sess) {
   try {
     const tableCreated = await sess.tableExists()
     if (tableCreated) {
-      if (!cmd) console.log('Table exists');
+      if (!cmd) showhelp()
       else if (cmd==='Q') { sess.queryTable(pk, sk, op) }
-      else if (cmd==='Q1') { sess.queryTable(pk, sk, op, indexes.Q1) }
-      else if (cmd==='Q2') { sess.queryTable(pk, sk, op, indexes.Q2) }
+      else if (cmd==='Q1') { sess.queryLocalIndex(pk, sk, op, 0) }
+      else if (cmd==='Q2') { sess.queryGlobalIndex(pk, sk, op, 0) }
       else if (cmd==='D') { sess.deleteTable() }
-      else if (cmd==='L') { console.log('Load', util.arg(3)); sess.load(util.arg(3)) }
-      else if (cmd==='I') { sess.listTables() }
+      else if (cmd==='L') { sess.loadTable(util.arg(3)) }
+      else if (cmd==='I') { sess.listIndexes() }
       else if (cmd==='R') { sess.reinitTable() }
       else if (cmd==='V') { console.log('Db config', util.obj2str(sess.getConfig())); }
-      else if (cmd==='X') { console.log(pk, sk) }
+      else if (cmd==='X') { sess.listTables(); }
       else console.log('Unrecognized option:', cmd);
     } else {
       sess.createTable().then(function() {

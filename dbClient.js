@@ -43,7 +43,7 @@ function init(region, endpoint) {
 
   async function insertRecords(collection) {
     try {
-      collection.forEach(item => {
+      collection.forEach(async (item) => {
         await docClient.put(item).promise()
       });
     }

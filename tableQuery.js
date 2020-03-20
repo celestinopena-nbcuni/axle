@@ -241,6 +241,20 @@ function init(dbConfig) {
     return configureIndex(gsi)
   }
 
+  function getLocalIndexQueryByOrdinal(indexNo) {
+    if (!dbConfig.LocalSecondaryIndexes) return null
+    const locIdx = dbConfig.LocalSecondaryIndexes[indexNo]
+    if (!locIdx) return null
+    return configureIndex(locIdx)
+  }
+
+  function getGlobalIndexQueryByOrdinal(indexNo) {
+    if (!dbConfig.GlobalSecondaryIndexes) return null
+    const gsi = dbConfig.GlobalSecondaryIndexes[indexNo]
+    if (!gsi) return null
+    return configureIndex(gsi)
+  }
+
   function configureIndex(index) {
     const hkey = index.KeySchema.find(item => item.KeyType=='HASH')
     const skey = index.KeySchema.find(item => item.KeyType=='RANGE')
@@ -343,7 +357,9 @@ function init(dbConfig) {
   } // configureIndex
   return {
     getLocalIndexQuery: getLocalIndexQuery,
+    getLocalIndexQueryByOrdinal: getLocalIndexQueryByOrdinal,
     getGlobalIndexQuery: getGlobalIndexQuery,
+    getGlobalIndexQueryByOrdinal: getGlobalIndexQueryByOrdinal,
     queryParams: queryParams,
     getQueryParams: getQueryParams,
     getUpdateQuery: getUpdateQuery,

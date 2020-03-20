@@ -32,6 +32,22 @@ function init(dbConfig) {
     catch (err) { console.log('Cannot list tables', err); }
   }
 
+  function showIndexes(collection, type = 'Global') {
+    if (!collection || collection.length===0) console.log(`NO ${type} Secondary indexes`);
+    else {
+      collection.forEach((idx, counter) => {
+        let pk=idx.KeySchema.find(item => item.KeyType=='HASH'); let pkname=pk?pk.AttributeName:'?'
+        let sk=idx.KeySchema.find(item => item.KeyType=='RANGE'); let skname=sk?sk.AttributeName:'?'
+        console.log(counter, `${type} Index "${idx.IndexName}" PK="${pkname}", SK="${skname}"`);
+      });
+    }
+  }
+
+  function listIndexes() {
+    showIndexes(dbConfig.LocalSecondaryIndexes, 'Local')
+    showIndexes(dbConfig.GlobalSecondaryIndexes)
+  }
+
   async function createTable() {
     try {
       const stats = await dbClient.createTable(dbConfig)
@@ -62,9 +78,50 @@ function init(dbConfig) {
     }
   }
 
-  async function queryTable(pkvalue, skvalue, comparison = 'E', secIndex) {
+  async function queryTable(pkvalue, skvalue, comparison = 'E') {
     if (!pkvalue) { console.log('Please provide PK value'); return; }
     const sortKeyDisplay = (skvalue || 'No sort key value provided')
+    const query = getQuery(pkvalue, skvalue, comparison)
+    const qparams = query.get()
+    const descrip =  query.explain()
+    try {
+      const data = await dbClient.query(qparams)
+      if (data.Items && data.Items.length>0) {
+        console.log(`"${descrip}" -> succeeded: ${data.Items.length} objects. Params=`, qparams);
+        console.log(util.shortView(data.Items, ['pk', 'sk', 'itemType', 'data']));
+      }
+      else console.log(`${descrip} found NO objects. Params=`, qparams);
+    }
+    catch (err) {
+      console.log('Error getting item by key', pkvalue, sortKeyDisplay, util.obj2str(err));
+    }
+  }
+
+  async function queryLocalIndex(pkvalue, skvalue, comparison = 'E', ordinal = 0) {
+    if (!pkvalue) { console.log('Please provide PK value'); return; }
+    const sortKeyDisplay = (skvalue || 'No sort key value provided')
+    const secIndex = queryBuilder.getLocalIndexQueryByOrdinal(ordinal)
+    const query = getQuery(pkvalue, skvalue, comparison, secIndex)
+    const qparams = query.get()
+    const descrip =  query.explain()
+    if (secIndex) console.log('Using', secIndex.toString());
+    try {
+      const data = await dbClient.query(qparams)
+      if (data.Items && data.Items.length>0) {
+        console.log(`"${descrip}" -> succeeded: ${data.Items.length} objects. Params=`, qparams);
+        console.log(util.shortView(data.Items, ['pk', 'sk', 'itemType', 'data']));
+      }
+      else console.log(`${descrip} found NO objects. Params=`, qparams);
+    }
+    catch (err) {
+      console.log('Error getting item by key', pkvalue, sortKeyDisplay, util.obj2str(err));
+    }
+  }
+
+  async function queryGlobalIndex(pkvalue, skvalue, comparison = 'E', ordinal = 0) {
+    if (!pkvalue) { console.log('Please provide PK value'); return; }
+    const sortKeyDisplay = (skvalue || 'No sort key value provided')
+    const secIndex = queryBuilder.getGlobalIndexQueryByOrdinal(ordinal)
     const query = getQuery(pkvalue, skvalue, comparison, secIndex)
     const qparams = query.get()
     const descrip =  query.explain()
@@ -89,7 +146,7 @@ function init(dbConfig) {
       return
     }
     if (Array.isArray(jsonObj)) {
-      console.log(`Importing data in ${datafile} into table ${tablename}`)
+      console.log(`Importing data in ${datafile} into table ${dbConfig.TableName}`)
       const records = jsonObj.map(item => { return { TableName: dbConfig.TableName, Item: item }})
       dbClient.insertRecords(records)
     } else {
@@ -114,10 +171,14 @@ function init(dbConfig) {
   return {
     tableExists: tableExists,
     createTable: createTable,
+    loadTable: loadTable,
     deleteTable: deleteTable,
     reinitTable: reinitTable,
     queryTable: queryTable,
+    queryLocalIndex: queryLocalIndex,
+    queryGlobalIndex: queryGlobalIndex,
     listTables: listTables,
+    listIndexes: listIndexes,
     getConfig: getConfig
   }
 } // init
