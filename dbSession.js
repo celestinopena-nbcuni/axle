@@ -1,17 +1,11 @@
 /* dbSession - A library that provides some general functions like create, load, and query for a given table */
-const AWS = require('aws-sdk'),
-  dbQuery = require('./tableQuery'),
+const dbQuery = require('./tableQuery'),
   dbClient = require('./dbClient').init('us-east-1', 'http://localhost:8000'),
   util = require('./general')
 
 function init(dbConfig) {
   const queryBuilder = dbQuery.init(dbConfig)
   const maintable = queryBuilder.getQueryParams()
-  /*
-  const indexes = {
-    'Q1': queryBuilder.getLocalIndexQuery('Itemtype'),
-    'Q2': queryBuilder.getGlobalIndexQuery('GSI1')
-  } */
 
   function getConfig() { return dbConfig }
   async function tableExists() {

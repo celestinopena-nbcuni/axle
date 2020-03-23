@@ -36,7 +36,7 @@ async function useDb(sess) {
       else if (cmd==='I') { sess.listIndexes() }
       else if (cmd==='R') { sess.reinitTable() }
       else if (cmd==='V') { console.log('Db config', util.obj2str(sess.getConfig())); }
-      else if (cmd==='X') { sess.listTables(); }
+      else if (cmd==='T') { sess.listTables(); }
       else console.log('Unrecognized option:', cmd);
     } else {
       sess.createTable().then(function() {
@@ -57,6 +57,7 @@ function showhelp() {
   console.log('  L filename = load data from file');
   console.log('  I = list indexes on this table');
   console.log('  V = view table config');
+  console.log('  T = list current tables');
   console.log('  Q pk sk op = query table by PK and SK using an operator, E,B, or C');
   console.log('  Q1 pk sk op = query GSI 1 index');
   console.log('  Q2 pk sk op = query GSI 2 index');
